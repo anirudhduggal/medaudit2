@@ -52,8 +52,12 @@ Medaudit 2.0 is a comprehensive tool designed to assist pentesters, auditors, an
 
 ### Traffic Analysis
 ```bash
-python medaudit.py analyze --trace path/to/wireshark_trace.pcap
+python medaudit.py path/to/wireshark_trace.pcap
 ```
+
+This will analyze the PCAP file and:
+- Determine if traffic is fully encrypted, partially encrypted, or unencrypted
+- If partially or fully unencrypted, extract and parse for HL7 messages and PII (names, addresses, financial information including credit cards, payment methods)
 
 ### Proxy Mode
 ```bash
