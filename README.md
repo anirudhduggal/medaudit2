@@ -27,6 +27,22 @@ Medaudit 2.0 is a comprehensive tool designed to assist pentesters, auditors, an
 - Sends out fuzzed traffic to test client resilience
 - Simulates malicious server behavior to assess client-side security
 
+## Project Structure
+```
+medaudit2/
+├── medaudit/
+│   ├── __init__.py          # Package initialization
+│   ├── __main__.py          # Main entry point
+│   ├── analysis/            # Traffic analysis module
+│   │   ├── __init__.py
+│   │   └── traffic_analysis.py
+│   └── pii/                 # PII detection module
+│       ├── __init__.py
+│       └── pii_check.py
+├── requirements.txt         # Python dependencies
+└── README.md               # This file
+```
+
 ## Installation
 
 ### Prerequisites
@@ -52,7 +68,7 @@ Medaudit 2.0 is a comprehensive tool designed to assist pentesters, auditors, an
 
 ### Traffic Analysis
 ```bash
-python medaudit.py path/to/wireshark_trace.pcap
+python -m medaudit path/to/wireshark_trace.pcap
 ```
 
 This will analyze the PCAP file and:

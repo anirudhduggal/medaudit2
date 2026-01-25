@@ -1,12 +1,16 @@
 """
 Traffic Analysis Module for Medaudit 2.0
-Handles PCAP file analysis for encryption status and HL7 message detection.
+AI Agent Instructions:
+- This module handles PCAP file parsing and encryption analysis
+- It detects TLS/SSL layers for encryption status
+- Extracts unencrypted payloads for HL7 and PII analysis
+- Use this module when analyzing network traffic captures
 """
 
 import sys
 from scapy.all import rdpcap, TCP, UDP, Raw, TLS
 from scapy.layers.inet import IP
-from pii_check import detect_pii
+from ..pii.pii_check import detect_pii
 
 def is_hl7_message(payload):
     """Check if payload contains HL7 message."""

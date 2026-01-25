@@ -1,6 +1,10 @@
 """
 PII Detection Module for Medaudit 2.0
-Handles detection of Personally Identifiable Information in network payloads.
+AI Agent Instructions:
+- This module handles detection of Personally Identifiable Information
+- Uses regex patterns and Luhn algorithm for credit card validation
+- Scans for names, addresses, payment methods, and financial keywords
+- Call detect_pii() with raw payload bytes to analyze for PII
 """
 
 import re
