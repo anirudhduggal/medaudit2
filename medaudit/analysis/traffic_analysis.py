@@ -8,7 +8,7 @@ AI Agent Instructions:
 """
 
 import sys
-from scapy.all import rdpcap, TCP, UDP, Raw, TLS
+from scapy.all import rdpcap, TCP, UDP, Raw
 from scapy.layers.inet import IP
 from ..pii.pii_check import detect_pii
 
@@ -38,8 +38,24 @@ def analyze_pcap(pcap_file):
 
     for packet in packets:
         if IP in packet:
-            # Check for TLS layer (encrypted)
-            if TLS in packet:
+            # Check for encryption indicators
+            # For now, check common SSL ports or if payload appears encrypted
+            is_encrypted = False
+            
+            if TCP in packet:
+                # Common SSL/TLS ports
+                if packet[TCP].dport in [443, 993, 995, 465, 587] or packet[TCP].sport in [443, 993, 995, 465, 587]:
+                    is_encrypted = True
+                # Check if payload looks like encrypted data (high entropy)
+                elif Raw in packet:
+                    payload = packet[Raw].load
+                    if len(payload) > 10:
+                        # Simple entropy check - encrypted data has high entropy
+                        entropy = len(set(payload)) / len(payload)
+                        if entropy > 0.8:  # High entropy suggests encryption
+                            is_encrypted = True
+            
+            if is_encrypted:
                 encrypted_packets += 1
             elif TCP in packet or UDP in packet:
                 # Check for Raw payload (unencrypted)
