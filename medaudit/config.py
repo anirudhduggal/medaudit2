@@ -23,6 +23,10 @@ class Config:
         "analysis": {
             "max_hl7_messages": 10,
             "max_pii_instances": 20
+        },
+        "logging": {
+            "enabled": True,
+            "log_dir": "logs"
         }
     }
 
@@ -62,9 +66,9 @@ class Config:
         """Get proxy configuration."""
         return self.config.get("proxy", {})
 
-    def get_analysis_config(self):
-        """Get analysis configuration."""
-        return self.config.get("analysis", {})
+    def get_logging_config(self):
+        """Get logging configuration."""
+        return self.config.get("logging", {})
 
     def create_default_config(self, path=None):
         """Create a default configuration file."""

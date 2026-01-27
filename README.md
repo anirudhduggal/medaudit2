@@ -131,6 +131,21 @@ This starts an HTTP server that:
 - Converts request bodies to HL7 messages wrapped in MLLP
 - Forwards messages to the target HL7 server
 - Returns HL7 responses as HTTP responses
+- **Logs all activities** to date-organized folders when enabled (HTTP requests, HL7 conversions, responses, and errors)
+
+#### Logging Features:
+- **Date-organized folders**: Logs saved in `logs/YYYY-MM-DD/` format
+- **JSON Lines format**: Structured logging in `.jsonl` files for easy parsing
+- **Comprehensive tracking**: All HTTP requests, HL7 conversions, responses, and errors logged
+- **Configurable**: Enable/disable logging and set custom log directory via configuration
+- **Audit trail**: Complete record of proxy operations for debugging and compliance
+
+#### Example Log Entry:
+```json
+{"timestamp": "2024-01-15T10:30:45.123456", "event_type": "http_request", "method": "POST", "path": "/", "content_length": 256, "client_ip": "127.0.0.1"}
+{"timestamp": "2024-01-15T10:30:45.234567", "event_type": "hl7_conversion", "original_length": 256, "hl7_length": 280, "hl7_message_start": "MSH|^~\\&|..."}
+{"timestamp": "2024-01-15T10:30:45.345678", "event_type": "hl7_response", "status": "success", "response_length": 512, "hl7_ack": "MSA|AA|..."}
+```
 
 ## Configuration
 
@@ -150,6 +165,10 @@ Create a `medaudit.json` file in the current directory or `~/.medaudit.json`:
   "analysis": {
     "max_hl7_messages": 10,
     "max_pii_instances": 20
+  },
+  "logging": {
+    "enabled": true,
+    "log_dir": "logs"
   }
 }
 ```
@@ -211,6 +230,10 @@ Create a `medaudit.json` file in the current directory or `~/.medaudit.json`:
   "analysis": {
     "max_hl7_messages": 10,
     "max_pii_instances": 20
+  },
+  "logging": {
+    "enabled": true,
+    "log_dir": "logs"
   }
 }
 ```
