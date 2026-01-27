@@ -16,6 +16,12 @@ Medaudit 2.0 is a comprehensive tool designed to assist pentesters, auditors, an
   - Financial keywords and patterns
 - **Output**: Clear reports on encryption status and detected sensitive data
 
+#### 2. HTTP-to-HL7 Proxy
+- **Purpose**: Convert HTTP requests to HL7 messages for testing medical devices with proxy tools like Burp Suite or OWASP ZAP
+- **Functionality**: HTTP server that receives POST requests, wraps content in HL7 format, and forwards to HL7 server
+- **Protocol**: Uses MLLP (Minimal Lower Layer Protocol) for HL7 transport
+- **Usage**: Compatible with Burp Suite, ZAP, and other HTTP proxy tools
+
 ### 🚧 Planned Features (Future Releases)
 
 #### 2. HL7 Proxy
@@ -39,12 +45,16 @@ medaudit2/
 ├── medaudit/                # Main Python package
 │   ├── __init__.py          # Package initialization with version info
 │   ├── __main__.py          # Main entry point for `python -m medaudit`
+│   ├── config.py            # Configuration file handling
 │   ├── analysis/            # Traffic analysis module
 │   │   ├── __init__.py      # Exports analysis functions
 │   │   └── traffic_analysis.py  # PCAP parsing, encryption detection, HL7 extraction
 │   ├── pii/                 # PII detection module
 │   │   ├── __init__.py      # Exports PII detection functions
 │   │   └── pii_check.py     # Credit card, name, address, financial detection
+│   ├── proxy/               # HTTP-to-HL7 proxy module
+│   │   ├── __init__.py      # Exports proxy functions
+│   │   └── proxy_server.py # HTTP server that converts requests to HL7
 │   └── testFiles/           # Test PCAP files for development
 │       └── hl7_v2_unencrypted_synthetic.pcap
 ├── venv/                    # Virtual environment (created during setup)
@@ -84,7 +94,7 @@ medaudit2/
 
 ### Traffic Analysis (Currently Implemented)
 ```bash
-python -m medaudit medaudit/testFiles/hl7_v2_unencrypted_synthetic.pcap
+python -m medaudit analyze medaudit/testFiles/hl7_v2_unencrypted_synthetic.pcap
 ```
 
 This will analyze the PCAP file and:
@@ -107,20 +117,72 @@ Detected PII instances: 3
   Potential Address: 0100
 ```
 
+### HTTP-to-HL7 Proxy (Currently Implemented)
+```bash
+# Start proxy with default config
+python -m medaudit proxy
+
+# Start proxy on custom ports
+python -m medaudit proxy --port 9090 --hl7-host 192.168.1.100 --hl7-port 2576
+
+# Forward to remote medical device server
+python -m medaudit proxy --hl7-host medical-device.company.com --hl7-port 2575
+```
+
+This starts an HTTP server that:
+- Listens for HTTP POST requests on the specified port
+- Converts request bodies to HL7 messages wrapped in MLLP
+- Forwards messages to the target HL7 server
+- Returns HL7 responses as HTTP responses
+
+## Configuration
+
+Medaudit 2.0 supports configuration files for default settings:
+
+### Configuration File
+Create a `medaudit.json` file in the current directory or `~/.medaudit.json`:
+
+```json
+{
+  "proxy": {
+    "http_host": "localhost",
+    "http_port": 8080,
+    "hl7_host": "localhost",
+    "hl7_port": 2575
+  },
+  "analysis": {
+    "max_hl7_messages": 10,
+    "max_pii_instances": 20
+  }
+}
+```
+
+### Configuration Commands
+```bash
+# Create default configuration file
+python -m medaudit config --create
+
+# Show current configuration
+python -m medaudit config --show
+```
+
+Command line arguments override configuration file settings.
+
+#### Usage with Burp Suite:
+1. Start the proxy: `python -m medaudit proxy`
+2. Configure Burp Suite to use upstream proxy at `localhost:8080`
+3. Send HTTP requests through Burp to target medical devices
+4. Requests are automatically converted to HL7 format
+
 ### Future Features (Not Yet Implemented)
 The following features are planned for future releases:
 
-#### Proxy Mode
-```bash
-# Planned: python -m medaudit proxy --port 8080 --target hl7-server:2575
-```
-
-#### Client Fuzzer
+#### HL7 Fuzzer (Client Mode)
 ```bash
 # Planned: python -m medaudit fuzz client --target hl7-server:2575 --fuzz-strings fuzz_payloads.txt
 ```
 
-#### Server Fuzzer
+#### HL7 Fuzzer (Server Mode)
 ```bash
 # Planned: python -m medaudit fuzz server --port 2575 --fuzz-mode aggressive
 ```

@@ -1,0 +1,12 @@
+{
+  "proxy": {
+    "http_host": "localhost",
+    "http_port": 9090,
+    "hl7_host": "192.168.1.100",
+    "hl7_port": 2576
+  },
+  "analysis": {
+    "max_hl7_messages": 10,
+    "max_pii_instances": 20
+  }
+}
