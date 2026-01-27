@@ -24,17 +24,12 @@ Medaudit 2.0 is a comprehensive tool designed to assist pentesters, auditors, an
 
 ### 🚧 Planned Features (Future Releases)
 
-#### 2. HL7 Proxy
-- Acts as a proxy for HL7 traffic
-- Enables integration with popular tools like Burp Suite or OWASP ZAP
-- Allows interception and modification of HL7 messages for testing purposes
-
-#### 3. HL7 Fuzzer (Client Mode)
+#### HL7 Fuzzer (Client Mode)
 - Provides basic fuzzing strings and capabilities
 - Tests medical devices by sending malformed or unexpected HL7 traffic
 - Helps identify vulnerabilities in device parsing and handling
 
-#### 4. HL7 Fuzzer (Server Mode)
+#### HL7 Fuzzer (Server Mode)
 - Acts as an HL7 server
 - Sends out fuzzed traffic to test client resilience
 - Simulates malicious server behavior to assess client-side security
@@ -46,12 +41,14 @@ medaudit2/
 │   ├── __init__.py          # Package initialization with version info
 │   ├── __main__.py          # Main entry point for `python -m medaudit`
 │   ├── config.py            # Configuration file handling
-│   ├── analysis/            # Traffic analysis module
-│   │   ├── __init__.py      # Exports analysis functions
-│   │   └── traffic_analysis.py  # PCAP parsing, encryption detection, HL7 extraction
-│   ├── pii/                 # PII detection module
-│   │   ├── __init__.py      # Exports PII detection functions
-│   │   └── pii_check.py     # Credit card, name, address, financial detection
+│   ├── analysis/            # Analysis module with submodules
+│   │   ├── __init__.py      # Unified exports from all analysis submodules
+│   │   ├── traffic/         # Traffic analysis submodule
+│   │   │   ├── __init__.py  # Exports traffic analysis functions
+│   │   │   └── traffic_analysis.py  # PCAP parsing, encryption detection, HL7 extraction
+│   │   └── pii/             # PII analysis submodule
+│   │       ├── __init__.py  # Exports PII detection functions
+│   │       └── pii_check.py # Credit card, name, address, financial detection
 │   ├── proxy/               # HTTP-to-HL7 proxy module
 │   │   ├── __init__.py      # Exports proxy functions
 │   │   └── proxy_server.py # HTTP server that converts requests to HL7
@@ -191,14 +188,43 @@ The following features are planned for future releases:
 
 Medaudit 2.0 is designed with a modular architecture and includes AI agent instructions throughout the codebase:
 
-- **Modular Design**: Separate packages for analysis (`medaudit.analysis`) and PII detection (`medaudit.pii`)
+- **Modular Design**: Analysis package with submodules for traffic (`medaudit.analysis.traffic`) and PII detection (`medaudit.analysis.pii`)
 - **AI-Friendly Code**: Each module includes docstring instructions for AI agents on how to use and extend the code
-- **Clear Separation**: Traffic parsing, encryption detection, HL7 extraction, and PII scanning are in separate modules
-- **Extensible**: Easy to add new analysis features or PII detection patterns
+- **Clear Separation**: Traffic parsing, encryption detection, HL7 extraction, and PII scanning are organized in submodules
+- **Extensible**: Easy to add new analysis submodules following the established pattern
 
 ## Configuration
 
-Medaudit 2.0 currently uses default settings. Future versions will support configuration files for custom settings.
+Medaudit 2.0 supports configuration files for default settings:
+
+### Configuration File
+Create a `medaudit.json` file in the current directory or `~/.medaudit.json`:
+
+```json
+{
+  "proxy": {
+    "http_host": "localhost",
+    "http_port": 8080,
+    "hl7_host": "localhost",
+    "hl7_port": 2575
+  },
+  "analysis": {
+    "max_hl7_messages": 10,
+    "max_pii_instances": 20
+  }
+}
+```
+
+### Configuration Commands
+```bash
+# Create default configuration file
+python -m medaudit config --create
+
+# Show current configuration
+python -m medaudit config --show
+```
+
+Command line arguments override configuration file settings.
 
 ## Development & Testing
 
@@ -209,10 +235,10 @@ The project includes test PCAP files for development and validation:
 ### Running Tests
 ```bash
 # Test with the included sample file
-python -m medaudit medaudit/testFiles/hl7_v2_unencrypted_synthetic.pcap
+python -m medaudit analyze medaudit/testFiles/hl7_v2_unencrypted_synthetic.pcap
 
 # Test with your own PCAP files
-python -m medaudit path/to/your/file.pcap
+python -m medaudit analyze path/to/your/file.pcap
 ```
 
 ### Code Quality
@@ -226,8 +252,8 @@ python -m medaudit path/to/your/file.pcap
 We welcome contributions! The codebase is designed to be extensible:
 
 1. **Analysis Features**: Add new traffic analysis capabilities in `medaudit/analysis/`
-2. **PII Detection**: Extend PII patterns in `medaudit/pii/pii_check.py`
-3. **New Modules**: Follow the modular structure for new features
+2. **PII Detection**: Extend PII patterns in `medaudit/analysis/pii/pii_check.py`
+3. **New Analysis Submodules**: Add new analysis types in `medaudit/analysis/` following the submodule pattern
 
 ### Development Setup
 ```bash

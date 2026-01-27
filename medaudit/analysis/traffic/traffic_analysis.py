@@ -10,7 +10,7 @@ AI Agent Instructions:
 import sys
 from scapy.all import rdpcap, TCP, UDP, Raw
 from scapy.layers.inet import IP
-from ..pii.pii_check import detect_pii
+from ..pii import detect_pii
 
 def is_hl7_message(payload):
     """Check if payload contains HL7 message."""
