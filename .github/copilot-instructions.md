@@ -49,13 +49,26 @@ Medaudit 2.0 is a comprehensive medical device security auditing tool that analy
 - **Unencrypted PII Exposure**: Identifies and extracts unencrypted PII from medical device traffic (patient names, IDs, addresses, phone numbers)
 - **HL7 Field Parsing**: Extracts PII from standard HL7 segments (MSH, PID, PV1) using pipe-delimited field structure (e.g., "DOE^JOHN^^^" for names)
 - **Test Data**: hl7_v2_unencrypted_synthetic.pcap contains realistic PII to demonstrate security vulnerability
-- **Presidio Integration**: Presidio NER requires configuration for HL7 format; fallback regex/manual extraction works for medical data formats
+- **Presidio-Based Detection**: Uses Microsoft Presidio Analyzer with Spacy NLP engine for entity recognition
+  - Supported Entity Types: PERSON, PHONE_NUMBER, EMAIL_ADDRESS, SSN, CREDIT_CARD, LOCATION, etc.
+  - Configuration: Uses `en_core_web_lg` Spacy model for NER (downloaded via `python -m spacy download en_core_web_lg`)
+  - HL7 Medical Context: Can be configured with custom recognizers for medical-specific entities (MRN, Provider names, etc.)
+  - Fallback Methods: Regex patterns and manual parsing for entities Presidio may miss in medical data formats
+  - Performance: NLP-based detection is computationally intensive; results cached when processing large PCAP files
 
 ## Dependencies & Integration
 - **Core library**: scapy for PCAP parsing (`from scapy.all import rdpcap, TCP, UDP, Raw`)
+- **PII Detection**: presidio-analyzer and presidio-anonymizer for entity recognition and redaction
+  - Uses `AnalyzerEngine` from `presidio_analyzer` module
+  - Requires Spacy NLP engine provider: `NlpEngineProvider` with `en_core_web_lg` model
+  - Custom recognizers: `CreditCardRecognizer`, `UsSsnRecognizer` pre-configured
+  - Analyzer configuration: See `medaudit/analysis/pii/pii_check.py` for implementation patterns
+- **NLP Engine**: Spacy (`python -m spacy download en_core_web_lg`)
+  - Model size: ~40MB, provides PERSON, ORG, GPE entity recognition
+  - Integration: Loaded via `NlpEngineProvider(nlp_configuration={...})`
 - **Input format**: Wireshark PCAP files with Ethernet frames; HTTP POST requests for proxy
-- **Output**: Console reports with encryption ratios, HL7 headers, PII classifications; HL7 responses converted back to HTTP; JSON Lines logs for proxy activities
-- **Extension points**: Add new analysis submodules following `medaudit/analysis/traffic/` pattern
+- **Output**: Console reports with encryption ratios, HL7 headers, PII classifications (with Presidio entity types); HL7 responses converted back to HTTP; JSON Lines logs for proxy activities
+- **Extension points**: Add new analysis submodules following `medaudit/analysis/traffic/` pattern; custom Presidio recognizers in `medaudit/analysis/pii/pii_check.py`
 
 ## AI Agent Notes
 - Focus on medical device security: HL7 protocol analysis, PII in healthcare contexts, proxy testing with security tools
@@ -67,3 +80,7 @@ Medaudit 2.0 is a comprehensive medical device security auditing tool that analy
 - Modular analysis structure supports adding new security checks (vulnerability scanning, compliance validation, etc.)
 - MLLP protocol handling for HL7 v2.x transport and security validation
 - PII detection optimized for healthcare data formats (pipe-delimited HL7 fields, name components)
+- **Presidio Usage**: When extending PII detection, use `AnalyzerEngine.analyze()` for NLP-based detection; combine with regex for hybrid approach
+- **Medical Entity Configuration**: Add custom recognizers for domain-specific PII (MRN patterns, medical provider identifiers, facility names)
+- **Performance Optimization**: Cache Presidio analyzer instance; Spacy model loads once at startup
+- **Integration Testing**: Verify new PII detectors work with test synthetic PCAP files; check entity type mappings in `tests/test_pii_check.py`

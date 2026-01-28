@@ -10,11 +10,12 @@ Medaudit 2.0 is a comprehensive tool designed to assist pentesters, auditors, an
 - **Input**: Wireshark PCAP trace files
 - **Encryption Analysis**: Determines if traffic is fully encrypted, partially encrypted, or unencrypted using heuristic methods (SSL ports + payload entropy analysis)
 - **HL7 Message Detection**: Identifies HL7 v2.x messages starting with "MSH|" in unencrypted traffic
-- **PII Detection**: Scans for sensitive information including:
-  - Credit card numbers (validated with Luhn algorithm)
-  - Names, addresses, and payment methods
-  - Financial keywords and patterns
-- **Output**: Clear reports on encryption status and detected sensitive data
+- **PII Detection**: Scans for sensitive information using:
+  - **Presidio Analyzer**: Microsoft's NLP-based PII detection engine for entity recognition (names, addresses, phone numbers, etc.)
+  - **Pattern Matching**: Credit card numbers (validated with Luhn algorithm), SSN, financial keywords
+  - **Regex Patterns**: Address and phone number detection
+  - **Comprehensive Coverage**: Credit cards, names, addresses, payment methods, and financial patterns
+- **Output**: Clear reports on encryption status and detected sensitive data with entity types
 
 #### 2. HTTP-to-HL7 Proxy
 - **Purpose**: Convert HTTP requests to HL7 messages for testing medical devices with proxy tools like Burp Suite or OWASP ZAP
@@ -95,7 +96,20 @@ medaudit2/
    pip install -r requirements.txt
    ```
 
-4. (Optional) Install additional tools like Burp Suite or OWASP ZAP for proxy functionality
+4. Download the Spacy NLP model required for Presidio PII detection:
+   ```bash
+   python -m spacy download en_core_web_lg
+   ```
+
+5. (Optional) Install additional tools like Burp Suite or OWASP ZAP for proxy functionality
+
+### PII Detection with Presidio
+
+Medaudit 2.0 uses **Microsoft Presidio** for advanced PII detection:
+- **Presidio Analyzer**: NLP-based entity recognition using Spacy NER
+- **Supported Entities**: PERSON, PHONE_NUMBER, EMAIL_ADDRESS, SSN, CREDIT_CARD, LOCATION, etc.
+- **Configurable**: Custom entity types and recognizers can be added
+- **Notes**: Presidio's accuracy depends on the trained NLP model; medical device data formats may require entity mapping tuning
 
 ## Usage
 
@@ -107,10 +121,11 @@ python -m medaudit analyze medaudit/testFiles/hl7_v2_unencrypted_synthetic.pcap
 This will analyze the PCAP file and:
 - Determine if traffic is **fully encrypted**, **partially encrypted**, or **unencrypted**
 - Extract and parse **HL7 messages** from unencrypted traffic
-- Detect **PII** including:
-  - Credit card numbers (with Luhn validation)
-  - Names, addresses, payment methods
-  - Financial keywords and patterns
+- Detect **PII** using multiple methods:
+  - **Presidio Analyzer**: NLP-based entity recognition (requires `en_core_web_lg` model)
+  - **Pattern Matching**: Credit card numbers with Luhn validation, SSN patterns
+  - **Regex Patterns**: Address and phone number detection
+  - **Healthcare Context**: Detects names, IDs, and other PII in HL7 message formats
 
 #### Example Output:
 ```
@@ -119,9 +134,9 @@ Traffic is fully unencrypted.
 Unencrypted packets: 1
 
 Detected PII instances: 3
-  Potential Address: 123 FAKE ST
-  Potential Address: 5
-  Potential Address: 0100
+  PERSON: John Doe
+  PATIENT_ID: 123456
+  PHONE_NUMBER: 555-0100
 ```
 
 ### HTTP-to-HL7 Proxy (Currently Implemented)
