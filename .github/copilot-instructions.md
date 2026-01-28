@@ -13,8 +13,12 @@ Medaudit 2.0 is a comprehensive medical device security auditing tool that analy
 - **Proxy**: Run `python -m medaudit proxy --port 8080 --hl7-host localhost --hl7-port 2575` to start HTTP-to-HL7 proxy
 - **Remote Proxy**: Use `--hl7-host <remote_ip>` and `--hl7-port <port>` to forward to external medical devices
 - **Configuration**: Create `medaudit.json` for default settings, use `python -m medaudit config --create`
+- **Testing**: Run tests from `tests/` directory:
+  - `pytest tests/test_pii_check.py` - PII detection unit tests
+  - `python tests/test_comprehensive.py` - Core component tests
+  - `python tests/analyze_pcap_pii.py` - PCAP PII extraction analysis
+  - Results saved to `tests/results/`, logs to `tests/logs/`
 - **Extension**: Add analysis submodules in `medaudit/analysis/`, PII patterns in `medaudit/analysis/pii/pii_check.py`, proxy features in `medaudit/proxy/`
-- **Testing**: Use synthetic PCAP files in `medaudit/testFiles/` for development validation
 
 ## Configuration System
 - **File locations**: `medaudit.json` (current dir), `~/.medaudit.json`, `~/.config/medaudit.json`

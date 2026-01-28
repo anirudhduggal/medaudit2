@@ -251,7 +251,17 @@ Command line arguments override configuration file settings.
 
 ## Development & Testing
 
-### Test Files
+### Test Structure
+The project organizes all test-related files under the `tests/` directory:
+- `tests/test_pii_check.py` - Official PII detection unit tests
+- `tests/test_comprehensive.py` - Core component tests
+- `tests/test_logging_system.py` - Logging system verification
+- `tests/analyze_pcap_pii.py` - PCAP PII extraction script
+- `tests/results/` - Test execution results and analysis reports
+- `tests/logs/` - Proxy activity logs (date-organized)
+- `tests/fixtures/` - Test data and fixtures
+
+### Test Data
 The project includes test PCAP files for development and validation:
 - `medaudit/testFiles/hl7_v2_unencrypted_synthetic.pcap` - Sample unencrypted HL7 traffic
 
@@ -259,6 +269,15 @@ The project includes test PCAP files for development and validation:
 ```bash
 # Test with the included sample file
 python -m medaudit analyze medaudit/testFiles/hl7_v2_unencrypted_synthetic.pcap
+
+# Run unit tests
+pytest tests/test_pii_check.py
+
+# Run comprehensive tests
+python tests/test_comprehensive.py
+
+# Analyze PCAP for PII extraction
+python tests/analyze_pcap_pii.py
 
 # Test with your own PCAP files
 python -m medaudit analyze path/to/your/file.pcap
