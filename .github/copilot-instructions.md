@@ -4,9 +4,9 @@
 Medaudit 2.0 is a comprehensive medical device security auditing tool that analyzes network traffic and provides HTTP-to-HL7 proxy functionality. It processes PCAP files to detect encryption status, extract HL7 v2.x messages, and identify personally identifiable information (PII) in unencrypted traffic. The proxy enables testing medical devices with tools like Burp Suite by converting HTTP requests to HL7 messages.
 
 ## Architecture
-- **Modular packages**: `medaudit.analysis` (with `traffic` and `pii` submodules) for analysis, `medaudit.proxy` for HTTP-to-HL7 conversion, `medaudit.config` for configuration management, `medaudit.logging` for proxy activity logging
+- **Modular packages**: `medaudit.analysis` (with `traffic`, `pii`, and `dicom` submodules) for analysis, `medaudit.proxy` (asyncio-based) for HTTP-to-HL7 conversion, `medaudit.config` (Pydantic-based) for configuration management, `medaudit.logging` for proxy activity logging
 - **Entry point**: `python -m medaudit analyze <pcap_file>` for analysis, `python -m medaudit proxy` for proxy server, `python -m medaudit config` for configuration
-- **Data flow**: PCAP → scapy parsing → encryption heuristics → HL7 detection ("MSH|" prefix) → PII scanning; HTTP → HL7 conversion → MLLP wrapping → target device; All proxy activities logged to date-organized JSON files
+- **Data flow**: PCAP → scapy parsing → encryption detection (deterministic) → HL7/DICOM parsing → PII scanning; HTTP → HL7 conversion → MLLP wrapping → target device; All proxy activities logged to date-organized JSON files
 
 ## Key Workflows
 - **Analysis**: Run `python -m medaudit analyze medaudit/testFiles/hl7_v2_unencrypted_synthetic.pcap` for testing
@@ -40,6 +40,13 @@ Medaudit 2.0 is a comprehensive medical device security auditing tool that analy
 - **Modular imports**: Unified access via `medaudit.analysis`, direct access via `medaudit.analysis.traffic/pii`
 - **Logging system**: JSON Lines format (.jsonl files) for structured logging, date-organized folders (logs/YYYY-MM-DD/), comprehensive proxy activity tracking
 
+## PII Detection & Security Analysis
+- **MLLP-Wrapped HL7 Detection**: Successfully parses MLLP-wrapped HL7 v2.x messages from PCAP files
+- **Unencrypted PII Exposure**: Identifies and extracts unencrypted PII from medical device traffic (patient names, IDs, addresses, phone numbers)
+- **HL7 Field Parsing**: Extracts PII from standard HL7 segments (MSH, PID, PV1) using pipe-delimited field structure (e.g., "DOE^JOHN^^^" for names)
+- **Test Data**: hl7_v2_unencrypted_synthetic.pcap contains realistic PII to demonstrate security vulnerability
+- **Presidio Integration**: Presidio NER requires configuration for HL7 format; fallback regex/manual extraction works for medical data formats
+
 ## Dependencies & Integration
 - **Core library**: scapy for PCAP parsing (`from scapy.all import rdpcap, TCP, UDP, Raw`)
 - **Input format**: Wireshark PCAP files with Ethernet frames; HTTP POST requests for proxy
@@ -54,4 +61,5 @@ Medaudit 2.0 is a comprehensive medical device security auditing tool that analy
 - Proxy enables Burp Suite/ZAP integration for medical device testing
 - Configuration system allows flexible deployment across different environments
 - Modular analysis structure supports adding new security checks (vulnerability scanning, compliance validation, etc.)
-- Modular analysis structure supports adding new security checks (vulnerability scanning, compliance validation, etc.)
+- MLLP protocol handling for HL7 v2.x transport and security validation
+- PII detection optimized for healthcare data formats (pipe-delimited HL7 fields, name components)

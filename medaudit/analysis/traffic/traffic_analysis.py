@@ -10,7 +10,7 @@ AI Agent Instructions:
 import sys
 from scapy.all import rdpcap, TCP, UDP, Raw
 from scapy.layers.inet import IP
-from ..pii import detect_pii
+from ..pii.pii_check import detect_pii, create_analyzer
 
 def is_hl7_message(payload):
     """Check if payload contains HL7 message."""
@@ -25,6 +25,7 @@ def is_hl7_message(payload):
 
 def analyze_pcap(pcap_file):
     """Analyze PCAP file for encryption and extract data."""
+    analyzer = create_analyzer()
     try:
         packets = rdpcap(pcap_file)
     except Exception as e:
@@ -69,7 +70,7 @@ def analyze_pcap(pcap_file):
                         hl7_messages.append(hl7_header)
 
                     # Check for PII
-                    pii = detect_pii(payload)
+                    pii = detect_pii(payload, analyzer)
                     if pii:
                         pii_instances.extend(pii)
 
