@@ -52,11 +52,21 @@ medaudit2/
 │   ├── proxy/               # HTTP-to-HL7 proxy module
 │   │   ├── __init__.py      # Exports proxy functions
 │   │   └── proxy_server.py # HTTP server that converts requests to HL7
+│   ├── logging.py           # Proxy activity logging system
 │   └── testFiles/           # Test PCAP files for development
 │       └── hl7_v2_unencrypted_synthetic.pcap
+├── tests/                   # Test suite and results
+│   ├── test_*.py            # Test scripts (unit tests, integration tests)
+│   ├── analyze_pcap_pii.py  # PCAP analysis script
+│   ├── results/             # Test execution results and reports
+│   ├── logs/                # Proxy activity logs (date-organized)
+│   └── fixtures/            # Test data and fixtures
+├── .github/                 # GitHub configuration
+│   └── copilot-instructions.md  # AI agent instructions
 ├── venv/                    # Virtual environment (created during setup)
 ├── .gitignore              # Git ignore rules for Python projects
 ├── requirements.txt         # Python dependencies
+├── medaudit.json           # Configuration file (optional)
 └── README.md               # This file
 ```
 
@@ -211,43 +221,6 @@ Medaudit 2.0 is designed with a modular architecture and includes AI agent instr
 - **AI-Friendly Code**: Each module includes docstring instructions for AI agents on how to use and extend the code
 - **Clear Separation**: Traffic parsing, encryption detection, HL7 extraction, and PII scanning are organized in submodules
 - **Extensible**: Easy to add new analysis submodules following the established pattern
-
-## Configuration
-
-Medaudit 2.0 supports configuration files for default settings:
-
-### Configuration File
-Create a `medaudit.json` file in the current directory or `~/.medaudit.json`:
-
-```json
-{
-  "proxy": {
-    "http_host": "localhost",
-    "http_port": 8080,
-    "hl7_host": "localhost",
-    "hl7_port": 2575
-  },
-  "analysis": {
-    "max_hl7_messages": 10,
-    "max_pii_instances": 20
-  },
-  "logging": {
-    "enabled": true,
-    "log_dir": "logs"
-  }
-}
-```
-
-### Configuration Commands
-```bash
-# Create default configuration file
-python -m medaudit config --create
-
-# Show current configuration
-python -m medaudit config --show
-```
-
-Command line arguments override configuration file settings.
 
 ## Development & Testing
 
