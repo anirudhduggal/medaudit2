@@ -1,0 +1,14 @@
+{
+  "server": {
+    "host": "localhost",
+    "port": 2575,
+    "use_tls": false,
+    "cert_file": null,
+    "key_file": null,
+    "verbose": true
+  },
+  "logging": {
+    "enabled": true,
+    "log_dir": "logs/hl7server"
+  }
+}

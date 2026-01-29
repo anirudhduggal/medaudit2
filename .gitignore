@@ -149,3 +149,13 @@ tests/logs/
 tests/results/
 tests/.pytest_cache/
 tests/__pycache__/
+
+# Logging directories (all log files and directories)
+logs/
+**/logs/
+*.log
+*.jsonl
+# HL7 Server logs
+logs/hl7server/
+logs/2026-*
+logs/test_hl7server/

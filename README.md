@@ -6,7 +6,19 @@ Medaudit 2.0 is a comprehensive tool designed to assist pentesters, auditors, an
 
 ### ✅ Currently Implemented
 
-#### 1. Traffic Analysis & PII Detection
+#### 1. Mock HL7 2.x Server
+- **Purpose**: Simulates real medical device HL7 servers for testing and security analysis
+- **Functionality**: Accepts MLLP-wrapped HL7 messages, generates ACK responses
+- **Encryption**: Optional TLS/SSL support (disabled by default for open testing)
+- **Logging**: Comprehensive message logging to structured JSON files with date organization
+- **CLI**: Command-line interface for easy server startup and configuration
+- **Features**:
+  - Multi-threaded client handling with configurable timeouts
+  - MLLP protocol compliance (0x0B frame start, 0x1C0D frame end)
+  - JSON Lines logging with separate files for messages, connections, and events
+  - Configuration file support for persistent settings
+
+#### 2. Traffic Analysis & PII Detection
 - **Input**: Wireshark PCAP trace files
 - **Encryption Analysis**: Determines if traffic is fully encrypted, partially encrypted, or unencrypted using heuristic methods (SSL ports + payload entropy analysis)
 - **HL7 Message Detection**: Identifies HL7 v2.x messages starting with "MSH|" in unencrypted traffic
@@ -17,7 +29,7 @@ Medaudit 2.0 is a comprehensive tool designed to assist pentesters, auditors, an
   - **Comprehensive Coverage**: Credit cards, names, addresses, payment methods, and financial patterns
 - **Output**: Clear reports on encryption status and detected sensitive data with entity types
 
-#### 2. HTTP-to-HL7 Proxy
+#### 3. HTTP-to-HL7 Proxy
 - **Purpose**: Convert HTTP requests to HL7 messages for testing medical devices with proxy tools like Burp Suite or OWASP ZAP
 - **Functionality**: HTTP server that receives POST requests, wraps content in HL7 format, and forwards to HL7 server
 - **Protocol**: Uses MLLP (Minimal Lower Layer Protocol) for HL7 transport
@@ -52,15 +64,26 @@ medaudit2/
 │   │       └── pii_check.py # Credit card, name, address, financial detection
 │   ├── proxy/               # HTTP-to-HL7 proxy module
 │   │   ├── __init__.py      # Exports proxy functions
-│   │   └── proxy_server.py # HTTP server that converts requests to HL7
+│   │   └── proxy_server.py  # HTTP server that converts requests to HL7
+│   ├── hl7server/           # Mock HL7 2.x server module
+│   │   ├── __init__.py      # Exports server components
+│   │   ├── __main__.py      # CLI entry point
+│   │   ├── hl7_mock_server.py   # Core HL7 server implementation
+│   │   ├── hl7_client.py    # HL7 client library with message generators
+│   │   ├── message_logger.py # Comprehensive message logging system
+│   │   ├── server_config.py # Configuration management for server
+│   │   └── cli.py           # Command-line interface
 │   ├── logging.py           # Proxy activity logging system
 │   └── testFiles/           # Test PCAP files for development
-│       └── hl7_v2_unencrypted_synthetic.pcap
+│       ├── hl7_v2_unencrypted_synthetic.pcap
+│       └── hl7_v2_unencrypted_synthetic_no_pii.pcap
 ├── tests/                   # Test suite and results
 │   ├── test_*.py            # Test scripts (unit tests, integration tests)
+│   ├── test_hl7_server_client.py   # HL7 server/client integration test
+│   ├── test_comprehensive_hl7.py   # Comprehensive HL7 test suite
 │   ├── analyze_pcap_pii.py  # PCAP analysis script
 │   ├── results/             # Test execution results and reports
-│   ├── logs/                # Proxy activity logs (date-organized)
+│   ├── logs/                # Proxy activity logs (date-organized) [in .gitignore]
 │   └── fixtures/            # Test data and fixtures
 ├── .github/                 # GitHub configuration
 │   └── copilot-instructions.md  # AI agent instructions
@@ -112,6 +135,40 @@ Medaudit 2.0 uses **Microsoft Presidio** for advanced PII detection:
 - **Notes**: Presidio's accuracy depends on the trained NLP model; medical device data formats may require entity mapping tuning
 
 ## Usage
+
+### Mock HL7 2.x Server (Currently Implemented)
+```bash
+# Start server with default settings (localhost:2575, non-encrypted)
+python -m medaudit.hl7server start
+
+# Start on custom port with custom HL7 message log directory
+python -m medaudit.hl7server start --port 2576 --log-dir /var/log/hl7
+
+# Create default configuration file
+python -m medaudit.hl7server config --create
+
+# Show current configuration
+python -m medaudit.hl7server config --show
+```
+
+**Features:**
+- Multi-threaded server accepts concurrent client connections
+- Generates HL7 ACK responses for each received message
+- Logs all messages, connections, and events to structured JSON files
+- Date-organized log directories (logs/YYYY-MM-DD/)
+- Per-message tracking with timestamps and metadata
+
+**Example Usage with HL7 Client:**
+```python
+from medaudit.hl7server import HL7Client
+
+# Send ADT (Admission/Discharge/Transfer) message
+client = HL7Client(host="localhost", port=2575)
+client.connect()
+ack = client.send_adt_message()  # Send pre-built ADT^A01 message
+print(ack)  # Print ACK response
+client.disconnect()
+```
 
 ### Traffic Analysis (Currently Implemented)
 ```bash
@@ -241,13 +298,16 @@ Medaudit 2.0 is designed with a modular architecture and includes AI agent instr
 
 ### Test Structure
 The project organizes all test-related files under the `tests/` directory:
-- `tests/test_pii_check.py` - Official PII detection unit tests
-- `tests/test_comprehensive.py` - Core component tests
-- `tests/test_logging_system.py` - Logging system verification
-- `tests/analyze_pcap_pii.py` - PCAP PII extraction script
-- `tests/results/` - Test execution results and analysis reports
-- `tests/logs/` - Proxy activity logs (date-organized)
-- `tests/fixtures/` - Test data and fixtures
+- `test_pii_check.py` - Unit tests for PII detection functionality
+- `test_comprehensive.py` - Tests for core Medaudit 2.0 components (config, logging, traffic analysis)
+- `test_comprehensive_hl7.py` - Comprehensive test suite for HL7 server/client components
+- `test_hl7_server_client.py` - Integration test: HL7 server and client message exchange
+- `test_logging_system.py` - Tests for proxy logging system
+- `test_pii_on_pcap.py` - PCAP PII detection and extraction testing
+- `analyze_pcap_pii.py` - Analysis script for PCAP PII research
+- `results/` - Test execution results and analysis reports
+- `logs/` - Proxy and server activity logs (date-organized, in .gitignore)
+- `fixtures/` - Test data and fixtures
 
 ### Test Data
 The project includes test PCAP files for development and validation:
@@ -258,11 +318,17 @@ The project includes test PCAP files for development and validation:
 # Test with the included sample file
 python -m medaudit analyze medaudit/testFiles/hl7_v2_unencrypted_synthetic.pcap
 
-# Run unit tests
-pytest tests/test_pii_check.py
-
-# Run comprehensive tests
+# Test core components
 python tests/test_comprehensive.py
+
+# Test HL7 server components
+python tests/test_comprehensive_hl7.py
+
+# Test HL7 server and client integration
+python tests/test_hl7_server_client.py
+
+# Run unit tests for PII detection
+pytest tests/test_pii_check.py
 
 # Analyze PCAP for PII extraction
 python tests/analyze_pcap_pii.py
@@ -277,13 +343,117 @@ python -m medaudit analyze path/to/your/file.pcap
 - Comprehensive `.gitignore` to keep repository clean
 - Virtual environment setup for consistent development
 
+## Code Quality & Analysis
+
+### Code Analysis Report
+
+#### Duplicate Test Files ⚠️
+The project contains overlapping test files that should be consolidated:
+
+**Status**: Tests are organized but show some duplication in coverage
+
+1. **test_comprehensive.py** (229 lines)
+   - Tests core Medaudit 2.0 components: config, logging, traffic analysis, PCAP parsing
+   - **Functions**: `test_imports()`, `test_config()`, `test_logging()`, `test_traffic_analysis()`, `test_pcap_analysis()`, `test_proxy_server()`
+
+2. **test_comprehensive_hl7.py** (366 lines)
+   - Tests HL7 server components: imports, logger, config, server startup, client connection, message sending, logging output, MLLP protocol
+   - **Functions**: `test_imports()`, `test_message_logger()`, `test_server_config()`, `test_server_startup()`, `test_client_connection()`, `test_message_sending()`, `test_logging_output()`, `test_mllp_protocol()`
+
+3. **test_hl7_server_client.py** (165 lines)
+   - Integration test: runs server and sends various HL7 message types
+   - **Functions**: `run_server()`, `run_client_tests()` (5 message types: ADT, ORM, ORU, MDM)
+
+4. **test_client.py** (20 lines)
+   - Simple client-only test - appears to be a minimal/abandoned test
+   - **Observation**: Could be removed as redundant with test_hl7_server_client.py
+
+5. **Other Test Files**:
+   - `test_pii_check.py` - Dedicated PII detection tests (no duplication)
+   - `test_logging_system.py` - Dedicated logging system tests (no duplication)
+   - `test_pii_on_pcap.py` - PCAP PII extraction analysis (no duplication)
+   - `analyze_pcap_pii.py` - Analysis script (not a test)
+
+**Recommendation**: Consolidate into **two main test suites**:
+- `tests/test_core_components.py` - All medaudit.analysis, medaudit.proxy, medaudit.config, medaudit.logging tests
+- `tests/test_hl7_server.py` - All medaudit.hl7server component tests (replace test_comprehensive_hl7.py)
+- Remove `test_client.py` (superseded by test_hl7_server_client.py)
+- Rename `test_hl7_server_client.py` to `test_hl7_integration.py`
+
+#### Code Duplication Analysis ✅
+**Finding**: Minimal code duplication detected. Architecture is well-modularized.
+
+**Key Observations**:
+- **Configuration handling**: Well-abstracted in `medaudit.config.Config` class and `medaudit.hl7server.server_config.ServerConfig` - separate concerns, no duplication
+- **Logging systems**: Two distinct loggers serve different purposes:
+  - `medaudit.logging.ProxyLogger` - HTTP-to-HL7 proxy activity logging (6+ months old)
+  - `medaudit.hl7server.message_logger.MessageLogger` - HL7 server message logging (recent)
+  - Could potentially share base class for common JSON file operations
+- **HL7 message parsing**: Centralized in `traffic_analysis.py`, properly imported by PII detection
+- **Import organization**: Good use of `__init__.py` files for unified exports
+
+**Minor Opportunity**:
+Create shared `medaudit.logging.BaseJsonLogger` to reduce duplication between ProxyLogger and MessageLogger:
+```python
+# Current pattern (both implement independently):
+- ProxyLogger._write_log_entry()
+- MessageLogger._write_to_jsonl()
+# Both do similar JSON serialization + date-organized file creation
+```
+
+#### Dead Code Analysis ✅
+**Finding**: No significant dead code detected.
+
+**Code Organization**:
+- All imports are used
+- All functions have documented purposes
+- No unreachable code blocks
+- No commented-out test code
+
+**One Minor Case**:
+- **`test_client.py`** - Appears to be a minimal test file that duplicates functionality in `test_hl7_server_client.py`. Could be archived or removed.
+
+#### Unused Imports ✅
+**Finding**: Clean imports throughout codebase. No unused imports detected.
+
+**Best Practices**:
+- Modules properly import only what they need
+- Submodule `__init__.py` files cleanly export public APIs
+- Internal imports are organized and meaningful
+
+### Recommendations Summary
+
+**High Priority** (Code cleanup):
+1. Consolidate test files (reduce from 5 test files to 3)
+2. Remove `test_client.py` - redundant with `test_hl7_server_client.py`
+
+**Medium Priority** (Architecture improvement):
+1. Create shared `BaseJsonLogger` class to reduce duplication between proxy and HL7 server logging
+2. Add type hints to function signatures for better IDE support
+
+**Low Priority** (Documentation):
+1. Add architecture diagram to README showing module dependencies
+2. Document logging system architecture (two separate systems serving different purposes)
+
+**Current State**: ✅ Well-organized, minimal duplication, clean code structure
+
 ## Contributing
 
 We welcome contributions! The codebase is designed to be extensible:
 
 1. **Analysis Features**: Add new traffic analysis capabilities in `medaudit/analysis/`
 2. **PII Detection**: Extend PII patterns in `medaudit/analysis/pii/pii_check.py`
-3. **New Analysis Submodules**: Add new analysis types in `medaudit/analysis/` following the submodule pattern
+3. **Proxy Features**: Enhance HTTP-to-HL7 conversion in `medaudit/proxy/proxy_server.py`
+4. **HL7 Server**: Extend mock server capabilities in `medaudit/hl7server/hl7_mock_server.py` or add new message types to `medaudit/hl7server/hl7_client.py`
+5. **Test Coverage**: Add new tests following existing patterns in `tests/`
+
+### Code Quality Guidelines
+- Follow existing code organization and module structure
+- Add docstrings to all functions and classes
+- Include AI agent instructions in module docstrings
+- Keep test files organized and avoid duplication
+- Use type hints where practical for better IDE support
+- Maintain consistent formatting and naming conventions
 
 ### Development Setup
 ```bash
