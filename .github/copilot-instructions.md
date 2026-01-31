@@ -1,3 +1,44 @@
+# Medaudit — AI Coding Agent Quick Instructions
+
+This file is a short, actionable guide to help AI coding agents be productive in this repo.
+
+**Quick entry points**
+- Run analysis: `python -m medaudit analyze <pcap_file>` (example: `medaudit/testFiles/hl7_v2_unencrypted_synthetic.pcap`)
+- Start proxy: `python -m medaudit proxy --port 8080 --hl7-host localhost --hl7-port 2575`
+- Config helpers: `python -m medaudit config --create` and `python -m medaudit config --show`
+
+**Architecture & data flow (concise)**
+- Packages: `medaudit.analysis` (subpackages: `traffic`, `pii`), `medaudit.proxy`, `medaudit.hl7server`, `medaudit.logging`, `medaudit.config`.
+- Data flows: PCAPs → `scapy` parsing (`rdpcap`) → encryption heuristic → HL7/DICOM extraction → PII scanning. Proxy: HTTP → HL7 conversion → MLLP wrap (`\x0b...\x1c\r`) → HL7 device.
+
+**Files to check first (fast wins)**
+- `medaudit/analysis/traffic/traffic_analysis.py` — PCAP parsing patterns (use `scapy` + `Raw` payload access).
+- `medaudit/analysis/pii/pii_check.py` — Presidio integration, regex fallbacks, analyzer caching.
+- `medaudit/proxy/proxy_server.py` — HTTP→HL7 conversion and MLLP transport logic.
+- `medaudit/hl7server/hl7_mock_server.py` and `hl7_client.py` — examples for sending/receiving HL7 messages.
+- `medaudit/config.py` — config precedence and file locations (`medaudit.json`, `~/.medaudit.json`, `~/.config/medaudit.json`).
+
+**Project-specific conventions & patterns**
+- Logs: JSON Lines (.jsonl) organized by date in `logs/YYYY-MM-DD/` (see `tests/fixtures/logs` example).
+- HL7 detection: search for `MSH|` in decoded payloads; decode with `errors='ignore'` to avoid crashes on binary.
+- Limit outputs to avoid noise: analysis shows first 10 HL7 messages and first 20 PII instances.
+- PII detection: hybrid approach — Presidio `AnalyzerEngine` (Spacy `en_core_web_lg`) + regex/HL7 field parsing for MRN/IDs.
+- Heuristics preferred: prefer lightweight, deterministic heuristics (entropy, ports) unless changes explicitly require heavy ML.
+
+**Developer workflows**
+- Run unit tests: `pytest tests/test_pii_check.py` or `pytest -q` to run full suite.
+- Run specific scripts: `python tests/analyze_pcap_pii.py` for sample analysis runs that produce results in `tests/results/`.
+- When modifying PII detection, run `tests/test_pii_on_pcap.py` and `tests/test_pii_check.py` to validate outputs.
+
+**Dependencies and environment**
+- Core libs: `scapy`, `presidio-analyzer`, `presidio-anonymizer`, `spacy` (run `python -m spacy download en_core_web_lg` if needed).
+- Keep Presidio analyzer instance cached (see `pii_check.py`) to avoid repeated Spacy loads.
+
+**What to avoid / quick gotchas**
+- Don’t assume all HL7 traffic is UTF-8 — use `errors='ignore'` and validate `MSH|` presence.
+- Avoid heavy model changes without updating tests — PII detection relies on hybrid regex + Presidio patterns.
+
+If anything important is missing or you want specific examples added (e.g., a short code snippet showing MLLP wrapping), tell me which area to expand.
 # Medaudit 2.0 - AI Agent Instructions
 
 ## Project Overview
