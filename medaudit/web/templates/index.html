@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medaudit 2.0 - Medical Device Security Analysis</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --success-color: #16a34a;
+            --warning-color: #d97706;
+            --danger-color: #dc2626;
+            --bg-dark: #1e293b;
+            --bg-card: #f8fafc;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+        
+        .navbar {
+            background: rgba(15, 23, 42, 0.95) !important;
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+        }
+        
+        .brand-icon {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .main-container {
+            padding: 2rem 0;
+        }
+        
+        .upload-zone {
+            background: rgba(255,255,255,0.03);
+            border: 2px dashed rgba(255,255,255,0.2);
+            border-radius: 16px;
+            padding: 4rem 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: var(--primary-color);
+            background: rgba(37, 99, 235, 0.1);
+        }
+        
+        .upload-zone i {
+            font-size: 4rem;
+            color: rgba(255,255,255,0.3);
+            margin-bottom: 1rem;
+        }
+        
+        .upload-zone h3 {
+            color: #fff;
+            margin-bottom: 0.5rem;
+        }
+        
+        .upload-zone p {
+            color: rgba(255,255,255,0.5);
+            margin: 0;
+        }
+        
+        .results-section {
+            display: none;
+        }
+        
+        .card {
+            background: rgba(255,255,255,0.95);
+            border: none;
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+            margin-bottom: 1.5rem;
+        }
+        
+        .card-header {
+            background: none;
+            border-bottom: 1px solid rgba(0,0,0,0.08);
+            padding: 1.25rem 1.5rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .card-header i {
+            font-size: 1.25rem;
+        }
+        
+        .card-body {
+            padding: 1.5rem;
+        }
+        
+        .stat-card {
+            text-align: center;
+            padding: 1.5rem;
+        }
+        
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+        
+        .stat-label {
+            color: #64748b;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+        
+        .encryption-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+        
+        .encryption-badge.high-risk {
+            background: rgba(220, 38, 38, 0.1);
+            color: var(--danger-color);
+        }
+        
+        .encryption-badge.medium-risk {
+            background: rgba(217, 119, 6, 0.1);
+            color: var(--warning-color);
+        }
+        
+        .encryption-badge.low-risk {
+            background: rgba(22, 163, 74, 0.1);
+            color: var(--success-color);
+        }
+        
+        .message-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            overflow: hidden;
+        }
+        
+        .message-header {
+            background: #1e293b;
+            color: #fff;
+            padding: 1rem 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+        
+        .message-header:hover {
+            background: #334155;
+        }
+        
+        .message-type {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        
+        .message-meta {
+            font-size: 0.8rem;
+            opacity: 0.7;
+        }
+        
+        .message-body {
+            padding: 1.25rem;
+            display: none;
+        }
+        
+        .message-body.show {
+            display: block;
+        }
+        
+        .segment-table {
+            width: 100%;
+            font-size: 0.875rem;
+        }
+        
+        .segment-table th {
+            background: #e2e8f0;
+            padding: 0.5rem 0.75rem;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        .segment-table td {
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid #e2e8f0;
+            vertical-align: top;
+        }
+        
+        .segment-name {
+            background: var(--primary-color);
+            color: #fff;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 600;
+            font-family: monospace;
+        }
+        
+        .field-value {
+            font-family: 'Consolas', 'Monaco', monospace;
+            background: #f1f5f9;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            word-break: break-all;
+        }
+        
+        .pii-badge {
+            background: rgba(220, 38, 38, 0.1);
+            color: var(--danger-color);
+            font-size: 0.75rem;
+            padding: 0.125rem 0.5rem;
+            border-radius: 50px;
+            margin-left: 0.5rem;
+        }
+        
+        .pii-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            background: #fff;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+        }
+        
+        .pii-type {
+            background: var(--danger-color);
+            color: #fff;
+            padding: 0.25rem 0.75rem;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-right: 1rem;
+            white-space: nowrap;
+        }
+        
+        .pii-value {
+            font-family: monospace;
+            flex-grow: 1;
+        }
+        
+        .pii-score {
+            color: #64748b;
+            font-size: 0.8rem;
+        }
+        
+        .connection-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            background: #f8fafc;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            font-family: monospace;
+            font-size: 0.875rem;
+        }
+        
+        .connection-arrow {
+            color: var(--primary-color);
+            margin: 0 1rem;
+        }
+        
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.9);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        
+        .loading-overlay.show {
+            display: flex;
+        }
+        
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255,255,255,0.1);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            color: #fff;
+            margin-top: 1.5rem;
+            font-size: 1.1rem;
+        }
+        
+        .patient-info-card {
+            background: linear-gradient(135deg, #eff6ff, #dbeafe);
+            border: 1px solid #93c5fd;
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 1rem;
+        }
+        
+        .patient-info-card h6 {
+            color: var(--primary-color);
+            margin-bottom: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .patient-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0.75rem;
+        }
+        
+        .patient-info-item {
+            font-size: 0.875rem;
+        }
+        
+        .patient-info-item label {
+            color: #64748b;
+            display: block;
+            font-size: 0.75rem;
+        }
+        
+        .raw-message {
+            background: #1e293b;
+            color: #a5f3fc;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .btn-analyze {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            border: none;
+            padding: 0.75rem 2rem;
+            font-weight: 600;
+            border-radius: 50px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-analyze:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+        }
+        
+        .error-alert {
+            display: none;
+        }
+        
+        .tab-pills {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .tab-pill {
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            background: #e2e8f0;
+            color: #475569;
+            border: none;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+        
+        .tab-pill.active {
+            background: var(--primary-color);
+            color: #fff;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #94a3b8;
+        }
+        
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <span class="brand-icon"><i class="bi bi-shield-check"></i></span>
+                Medaudit 2.0
+            </a>
+            <span class="text-white-50">Medical Device Security Analysis</span>
+        </div>
+    </nav>
+    
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text">Analyzing PCAP file...</div>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="container main-container">
+        <!-- Upload Section -->
+        <div id="uploadSection">
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <div class="upload-zone" id="uploadZone">
+                        <i class="bi bi-cloud-arrow-up"></i>
+                        <h3>Upload PCAP File</h3>
+                        <p>Drag & drop your PCAP file here, or click to browse</p>
+                        <p class="mt-3"><small class="text-white-50">Supported formats: .pcap, .pcapng, .cap</small></p>
+                        <input type="file" id="fileInput" accept=".pcap,.pcapng,.cap" hidden>
+                    </div>
+                    
+                    <div class="alert alert-danger mt-3 error-alert" id="errorAlert">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <span id="errorMessage"></span>
+                    </div>
+                    
+                    <div class="text-center mt-4" id="selectedFileInfo" style="display: none;">
+                        <div class="text-white mb-3">
+                            <i class="bi bi-file-earmark-binary me-2"></i>
+                            <span id="selectedFileName"></span>
+                        </div>
+                        <button class="btn btn-primary btn-analyze" id="analyzeBtn">
+                            <i class="bi bi-search me-2"></i>Analyze Traffic
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Results Section -->
+        <div class="results-section" id="resultsSection">
+            <!-- Summary Stats -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <button class="btn btn-outline-light btn-sm mb-3" id="newAnalysisBtn">
+                        <i class="bi bi-arrow-left me-2"></i>New Analysis
+                    </button>
+                </div>
+            </div>
+            
+            <div class="row g-4 mb-4">
+                <div class="col-md-3">
+                    <div class="card stat-card">
+                        <div class="stat-value text-primary" id="statPackets">0</div>
+                        <div class="stat-label">Total Packets</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card">
+                        <div class="stat-value text-success" id="statHL7">0</div>
+                        <div class="stat-label">HL7 Messages</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card">
+                        <div class="stat-value text-danger" id="statPII">0</div>
+                        <div class="stat-label">PII Findings</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card">
+                        <div class="stat-value text-info" id="statConnections">0</div>
+                        <div class="stat-label">Connections</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Encryption Status -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-lock text-primary"></i>
+                    Encryption Analysis
+                </div>
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <div id="encryptionBadge" class="encryption-badge">
+                                <i class="bi bi-shield-x"></i>
+                                <span>Unknown</span>
+                            </div>
+                            <p class="mt-3 mb-0 text-muted" id="encryptionDetails">
+                                Analyzing encryption status...
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="progress" style="height: 24px; border-radius: 12px;">
+                                <div class="progress-bar bg-success" id="encryptedBar" style="width: 0%">
+                                    Encrypted
+                                </div>
+                                <div class="progress-bar bg-danger" id="unencryptedBar" style="width: 0%">
+                                    Unencrypted
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-2 small text-muted">
+                                <span><span id="encryptedCount">0</span> encrypted</span>
+                                <span><span id="unencryptedCount">0</span> unencrypted</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- PII Findings -->
+            <div class="card" id="piiCard">
+                <div class="card-header">
+                    <i class="bi bi-person-exclamation text-danger"></i>
+                    PII Detected
+                    <span class="badge bg-danger ms-auto" id="piiBadge">0</span>
+                </div>
+                <div class="card-body" id="piiContent">
+                    <div class="empty-state">
+                        <i class="bi bi-shield-check"></i>
+                        <p>No PII detected in traffic</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- HL7 Messages -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-chat-square-text text-success"></i>
+                    HL7 Messages
+                    <span class="badge bg-success ms-auto" id="hl7Badge">0</span>
+                </div>
+                <div class="card-body" id="hl7Content">
+                    <div class="empty-state">
+                        <i class="bi bi-chat-square"></i>
+                        <p>No HL7 messages found in traffic</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Connections -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-diagram-3 text-info"></i>
+                    Network Connections
+                </div>
+                <div class="card-body" id="connectionsContent">
+                    <div class="empty-state">
+                        <i class="bi bi-diagram-3"></i>
+                        <p>No connections detected</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // DOM Elements
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const selectedFileInfo = document.getElementById('selectedFileInfo');
+        const selectedFileName = document.getElementById('selectedFileName');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const uploadSection = document.getElementById('uploadSection');
+        const resultsSection = document.getElementById('resultsSection');
+        const errorAlert = document.getElementById('errorAlert');
+        const errorMessage = document.getElementById('errorMessage');
+        const newAnalysisBtn = document.getElementById('newAnalysisBtn');
+        
+        let selectedFile = null;
+        
+        // Upload Zone Events
+        uploadZone.addEventListener('click', () => fileInput.click());
+        
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+        
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+        
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileSelect(files[0]);
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+        
+        function handleFileSelect(file) {
+            const validExtensions = ['.pcap', '.pcapng', '.cap'];
+            const ext = '.' + file.name.split('.').pop().toLowerCase();
+            
+            if (!validExtensions.includes(ext)) {
+                showError('Invalid file type. Please upload a PCAP file.');
+                return;
+            }
+            
+            hideError();
+            selectedFile = file;
+            selectedFileName.textContent = file.name + ' (' + formatFileSize(file.size) + ')';
+            selectedFileInfo.style.display = 'block';
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+        
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorAlert.style.display = 'block';
+        }
+        
+        function hideError() {
+            errorAlert.style.display = 'none';
+        }
+        
+        // Analyze Button
+        analyzeBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+            
+            hideError();
+            loadingOverlay.classList.add('show');
+            
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            
+            try {
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Analysis failed');
+                }
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Analysis failed');
+                }
+                
+                displayResults(data);
+                
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                loadingOverlay.classList.remove('show');
+            }
+        });
+        
+        // New Analysis Button
+        newAnalysisBtn.addEventListener('click', () => {
+            resultsSection.style.display = 'none';
+            uploadSection.style.display = 'block';
+            selectedFile = null;
+            fileInput.value = '';
+            selectedFileInfo.style.display = 'none';
+        });
+        
+        // Display Results
+        function displayResults(data) {
+            uploadSection.style.display = 'none';
+            resultsSection.style.display = 'block';
+            
+            const summary = data.summary;
+            const encryption = data.encryption;
+            
+            // Update Stats
+            document.getElementById('statPackets').textContent = summary.total_packets;
+            document.getElementById('statHL7').textContent = summary.hl7_message_count;
+            document.getElementById('statPII').textContent = summary.pii_count;
+            document.getElementById('statConnections').textContent = summary.unique_connections;
+            
+            // Update Encryption Status
+            const encBadge = document.getElementById('encryptionBadge');
+            const encDetails = document.getElementById('encryptionDetails');
+            
+            let badgeClass, badgeIcon, badgeText;
+            if (encryption.status === 'fully_encrypted') {
+                badgeClass = 'low-risk';
+                badgeIcon = 'bi-shield-check';
+                badgeText = 'Fully Encrypted';
+            } else if (encryption.status === 'unencrypted') {
+                badgeClass = 'high-risk';
+                badgeIcon = 'bi-shield-x';
+                badgeText = 'Unencrypted';
+            } else if (encryption.status === 'partially_encrypted') {
+                badgeClass = 'medium-risk';
+                badgeIcon = 'bi-shield-exclamation';
+                badgeText = 'Partially Encrypted';
+            } else {
+                badgeClass = 'medium-risk';
+                badgeIcon = 'bi-question-circle';
+                badgeText = 'Unknown';
+            }
+            
+            encBadge.className = 'encryption-badge ' + badgeClass;
+            encBadge.innerHTML = `<i class="bi ${badgeIcon}"></i><span>${badgeText}</span>`;
+            
+            encDetails.textContent = `${encryption.percentage}% of analyzed traffic is encrypted. ` +
+                `Risk Level: ${encryption.risk_level.toUpperCase()}`;
+            
+            // Update progress bars
+            const total = encryption.encrypted_count + encryption.unencrypted_count || 1;
+            document.getElementById('encryptedBar').style.width = (encryption.encrypted_count / total * 100) + '%';
+            document.getElementById('unencryptedBar').style.width = (encryption.unencrypted_count / total * 100) + '%';
+            document.getElementById('encryptedCount').textContent = encryption.encrypted_count;
+            document.getElementById('unencryptedCount').textContent = encryption.unencrypted_count;
+            
+            // Display PII Findings
+            displayPII(data.pii_findings);
+            
+            // Display HL7 Messages
+            displayHL7Messages(data.hl7_messages);
+            
+            // Display Connections
+            displayConnections(data.connections);
+        }
+        
+        function displayPII(piiFindings) {
+            const container = document.getElementById('piiContent');
+            const badge = document.getElementById('piiBadge');
+            
+            badge.textContent = piiFindings.length;
+            
+            if (piiFindings.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="bi bi-shield-check"></i>
+                        <p>No PII detected in traffic</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '';
+            piiFindings.forEach(pii => {
+                html += `
+                    <div class="pii-item">
+                        <span class="pii-type">${escapeHtml(pii.entity_type)}</span>
+                        <span class="pii-value">${escapeHtml(pii.value)}</span>
+                        <span class="pii-score">Score: ${pii.score}</span>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function displayHL7Messages(messages) {
+            const container = document.getElementById('hl7Content');
+            const badge = document.getElementById('hl7Badge');
+            
+            badge.textContent = messages.length;
+            
+            if (messages.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="bi bi-chat-square"></i>
+                        <p>No HL7 messages found in traffic</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '';
+            messages.forEach((msg, index) => {
+                const patientHtml = msg.patient_info ? buildPatientInfoHtml(msg.patient_info) : '';
+                const segmentsHtml = buildSegmentsHtml(msg.segments);
+                
+                html += `
+                    <div class="message-card">
+                        <div class="message-header" onclick="toggleMessage(${index})">
+                            <div>
+                                <span class="message-type">${escapeHtml(msg.message_type || 'Unknown')}</span>
+                                <span class="message-meta ms-3">
+                                    ID: ${escapeHtml(msg.message_control_id || 'N/A')} | 
+                                    ${msg.segment_count} segments
+                                </span>
+                            </div>
+                            <div class="message-meta">
+                                ${escapeHtml(msg.source)} → ${escapeHtml(msg.destination)}
+                                <i class="bi bi-chevron-down ms-2"></i>
+                            </div>
+                        </div>
+                        <div class="message-body" id="messageBody${index}">
+                            ${patientHtml}
+                            
+                            <div class="tab-pills">
+                                <button class="tab-pill active" onclick="showTab(${index}, 'parsed')">Parsed Fields</button>
+                                <button class="tab-pill" onclick="showTab(${index}, 'raw')">Raw Message</button>
+                            </div>
+                            
+                            <div class="tab-content active" id="tab-parsed-${index}">
+                                ${segmentsHtml}
+                            </div>
+                            
+                            <div class="tab-content" id="tab-raw-${index}">
+                                <div class="raw-message">${escapeHtml(msg.raw_message || '')}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function buildPatientInfoHtml(patient) {
+            if (!patient || Object.keys(patient).length === 0) return '';
+            
+            let items = '';
+            if (patient.name && patient.name.full) {
+                items += `<div class="patient-info-item"><label>Name</label>${escapeHtml(patient.name.full)}</div>`;
+            }
+            if (patient.patient_id) {
+                items += `<div class="patient-info-item"><label>Patient ID</label>${escapeHtml(patient.patient_id)}</div>`;
+            }
+            if (patient.date_of_birth) {
+                items += `<div class="patient-info-item"><label>DOB</label>${escapeHtml(patient.date_of_birth)}</div>`;
+            }
+            if (patient.sex) {
+                items += `<div class="patient-info-item"><label>Sex</label>${escapeHtml(patient.sex)}</div>`;
+            }
+            if (patient.phone_home) {
+                items += `<div class="patient-info-item"><label>Phone</label>${escapeHtml(patient.phone_home)}</div>`;
+            }
+            if (patient.address) {
+                items += `<div class="patient-info-item"><label>Address</label>${escapeHtml(patient.address)}</div>`;
+            }
+            
+            if (!items) return '';
+            
+            return `
+                <div class="patient-info-card">
+                    <h6><i class="bi bi-person-badge me-2"></i>Patient Information</h6>
+                    <div class="patient-info-grid">${items}</div>
+                </div>
+            `;
+        }
+        
+        function buildSegmentsHtml(segments) {
+            if (!segments || segments.length === 0) {
+                return '<p class="text-muted">No segments parsed</p>';
+            }
+            
+            let html = '';
+            segments.forEach(seg => {
+                html += `
+                    <div class="mb-3">
+                        <h6><span class="segment-name">${escapeHtml(seg.name)}</span></h6>
+                        <table class="segment-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 60px;">#</th>
+                                    <th style="width: 200px;">Field Name</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                if (seg.fields && seg.fields.length > 0) {
+                    seg.fields.forEach(field => {
+                        const piiMark = field.is_pii ? '<span class="pii-badge">PII</span>' : '';
+                        html += `
+                            <tr>
+                                <td>${field.index}</td>
+                                <td>${escapeHtml(field.name)}${piiMark}</td>
+                                <td><span class="field-value">${escapeHtml(field.value)}</span></td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    html += `<tr><td colspan="3" class="text-muted">No fields parsed</td></tr>`;
+                }
+                
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            });
+            
+            return html;
+        }
+        
+        function displayConnections(connections) {
+            const container = document.getElementById('connectionsContent');
+            
+            if (!connections || connections.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="bi bi-diagram-3"></i>
+                        <p>No connections detected</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '';
+            connections.forEach(conn => {
+                const encIcon = conn.encrypted ? 
+                    '<i class="bi bi-lock-fill text-success"></i>' : 
+                    '<i class="bi bi-unlock-fill text-danger"></i>';
+                
+                html += `
+                    <div class="connection-item">
+                        ${escapeHtml(conn.source_ip)}:${conn.source_port}
+                        <span class="connection-arrow">
+                            <i class="bi bi-arrow-right"></i>
+                        </span>
+                        ${escapeHtml(conn.dest_ip)}:${conn.dest_port}
+                        <span class="ms-3 text-muted">${conn.protocol}</span>
+                        <span class="ms-2">${encIcon}</span>
+                        <span class="ms-auto text-muted">${conn.packet_count} packets</span>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function toggleMessage(index) {
+            const body = document.getElementById('messageBody' + index);
+            body.classList.toggle('show');
+        }
+        
+        function showTab(msgIndex, tabName) {
+            // Hide all tabs for this message
+            document.querySelectorAll(`[id^="tab-"][id$="-${msgIndex}"]`).forEach(el => {
+                el.classList.remove('active');
+            });
+            
+            // Deactivate all pills
+            const messageBody = document.getElementById('messageBody' + msgIndex);
+            messageBody.querySelectorAll('.tab-pill').forEach(pill => {
+                pill.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(`tab-${tabName}-${msgIndex}`).classList.add('active');
+            
+            // Activate clicked pill
+            event.target.classList.add('active');
+        }
+        
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

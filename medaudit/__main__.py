@@ -5,6 +5,7 @@ AI Agent Instructions:
 - This is the main entry point for the Medaudit 2.0 application
 - Run with: python -m medaudit analyze <pcap_file> for traffic analysis
 - Run with: python -m medaudit proxy [--port PORT] [--hl7-host HOST] [--hl7-port PORT] for HTTP-to-HL7 proxy
+- Run with: python -m medaudit web [--port PORT] [--host HOST] for web UI
 - It imports and calls the appropriate functionality
 - Configuration loaded from medaudit.json if present
 """
@@ -38,6 +39,13 @@ def main():
     proxy_parser.add_argument('--hl7-port', type=int, default=proxy_config.get('hl7_port', 2575),
                              help=f'HL7 server port (default: {proxy_config.get("hl7_port", 2575)})')
 
+    # Web UI command
+    web_parser = subparsers.add_parser('web', help='Start the web UI for PCAP analysis')
+    web_parser.add_argument('--host', default='0.0.0.0',
+                           help='Host to bind the web server (default: 0.0.0.0)')
+    web_parser.add_argument('--port', type=int, default=8080,
+                           help='Port for the web server (default: 8080)')
+
     # Config command
     config_parser = subparsers.add_parser('config', help='Configuration management')
     config_parser.add_argument('--create', action='store_true', help='Create default configuration file')
@@ -49,6 +57,9 @@ def main():
         analyze_pcap(args.pcap_file)
     elif args.command == 'proxy':
         start_proxy(http_port=args.port, hl7_host=args.hl7_host, hl7_port=args.hl7_port)
+    elif args.command == 'web':
+        from .web import start_web_server
+        start_web_server(host=args.host, port=args.port)
     elif args.command == 'config':
         if args.create:
             config.create_default_config()

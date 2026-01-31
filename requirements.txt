@@ -5,5 +5,12 @@ presidio-analyzer
 presidio-anonymizer
 spacy
 
+# Web UI dependencies
+fastapi
+uvicorn[standard]
+python-multipart
+jinja2
+aiofiles
+
 # After installing requirements, download the spacy model:
 # python -m spacy download en_core_web_lg

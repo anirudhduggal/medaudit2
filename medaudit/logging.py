@@ -31,8 +31,8 @@ class ProxyLogger:
         """Get current timestamp in ISO format."""
         return datetime.now().isoformat()
 
-    def log_http_request(self, method: str, path: str, headers: Dict[str, str],
-                        body: str, client_ip: str) -> str:
+    def log_http_request(self, method: str, path: str, headers: Dict[str, str] = None,
+                        body: str = None, client_ip: str = None, content_length: int = 0) -> str:
         """Log an HTTP request."""
         log_entry = {
             "timestamp": self._get_timestamp(),
@@ -40,40 +40,67 @@ class ProxyLogger:
             "client_ip": client_ip,
             "method": method,
             "path": path,
-            "headers": dict(headers),
-            "body_length": len(body),
-            "body_preview": body[:500] + "..." if len(body) > 500 else body
+            "content_length": content_length
         }
+        
+        if headers:
+            log_entry["headers"] = dict(headers)
+        if body:
+            log_entry["body_preview"] = body[:500] + "..." if len(body) > 500 else body
 
         return self._write_log_entry(log_entry, "http_requests")
 
-    def log_hl7_conversion(self, http_body: str, hl7_message: str) -> str:
+    def log_hl7_conversion(self, http_body: str = None, hl7_message: str = None,
+                          original_length: int = 0, hl7_length: int = 0,
+                          hl7_message_start: str = None) -> str:
         """Log HL7 message conversion."""
         log_entry = {
             "timestamp": self._get_timestamp(),
             "type": "hl7_conversion",
-            "http_body_length": len(http_body),
-            "http_body_preview": http_body[:200] + "..." if len(http_body) > 200 else http_body,
-            "hl7_message_length": len(hl7_message),
-            "hl7_message_preview": hl7_message[:300] + "..." if len(hl7_message) > 300 else hl7_message
+            "original_length": original_length or (len(http_body) if http_body else 0),
+            "hl7_length": hl7_length or (len(hl7_message) if hl7_message else 0),
         }
+        
+        if hl7_message_start:
+            log_entry["hl7_message_start"] = hl7_message_start
+        elif hl7_message:
+            log_entry["hl7_message_preview"] = hl7_message[:300] + "..." if len(hl7_message) > 300 else hl7_message
 
         return self._write_log_entry(log_entry, "hl7_conversions")
 
-    def log_hl7_response(self, hl7_host: str, hl7_port: int, response: str,
-                        success: bool, error_message: str = None) -> str:
+    def log_hl7_response(self, hl7_host: str = None, hl7_port: int = None, response: str = None,
+                        success: bool = None, error_message: str = None, status: str = None,
+                        response_length: int = 0, hl7_ack: str = None) -> str:
         """Log HL7 server response."""
         log_entry = {
             "timestamp": self._get_timestamp(),
             "type": "hl7_response",
-            "hl7_server": f"{hl7_host}:{hl7_port}",
-            "success": success,
-            "response_length": len(response) if response else 0,
-            "response_preview": response[:300] + "..." if response and len(response) > 300 else response,
-            "error_message": error_message
+            "status": status or ("success" if success else "error"),
+            "response_length": response_length or (len(response) if response else 0),
         }
+        
+        if hl7_host and hl7_port:
+            log_entry["hl7_server"] = f"{hl7_host}:{hl7_port}"
+        if hl7_ack:
+            log_entry["hl7_ack"] = hl7_ack
+        elif response:
+            log_entry["response_preview"] = response[:300] + "..." if len(response) > 300 else response
+        if error_message:
+            log_entry["error_message"] = error_message
 
         return self._write_log_entry(log_entry, "hl7_responses")
+    
+    def log_error(self, error_message: str, error_type: str = "general", context: Dict[str, Any] = None) -> str:
+        """Log a general error."""
+        log_entry = {
+            "timestamp": self._get_timestamp(),
+            "type": "error",
+            "error_type": error_type,
+            "error_message": error_message,
+            "context": context or {}
+        }
+
+        return self._write_log_entry(log_entry, "proxy_errors")
 
     def log_proxy_error(self, error_type: str, error_message: str, context: Dict[str, Any] = None) -> str:
         """Log proxy errors."""
