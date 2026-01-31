@@ -3,7 +3,7 @@
 Medaudit 2.0 - Main Entry Point
 AI Agent Instructions:
 - This is the main entry point for the Medaudit 2.0 application
-- Run with: python -m medaudit analyze <pcap_file> for traffic analysis
+python -m medaudit web --host 0.0.0.0 --port 8080- Run with: python -m medaudit analyze <pcap_file> for traffic analysis
 - Run with: python -m medaudit proxy [--port PORT] [--hl7-host HOST] [--hl7-port PORT] for HTTP-to-HL7 proxy
 - Run with: python -m medaudit web [--port PORT] [--host HOST] for web UI
 - It imports and calls the appropriate functionality
