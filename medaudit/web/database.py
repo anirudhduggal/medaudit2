@@ -15,6 +15,9 @@ from sqlalchemy.orm import sessionmaker, relationship, Session
 import hashlib
 import secrets
 
+# Import centralized paths
+from medaudit.paths import get_database_path, DATABASE_PATH
+
 
 def hash_password(password: str) -> str:
     """Hash a password using SHA-256 with salt."""
@@ -35,14 +38,14 @@ def verify_password(password: str, hashed: str) -> bool:
 # Database setup
 Base = declarative_base()
 
-# Default database path
-DEFAULT_DB_PATH = Path.cwd() / "data" / "medaudit.db"
+# Default database path (from centralized paths module)
+DEFAULT_DB_PATH = DATABASE_PATH
 
 
 def get_database_url(db_path: Optional[Path] = None) -> str:
     """Get database URL, creating directory if needed."""
     if db_path is None:
-        db_path = DEFAULT_DB_PATH
+        db_path = get_database_path()
     db_path.parent.mkdir(parents=True, exist_ok=True)
     return f"sqlite:///{db_path}"
 

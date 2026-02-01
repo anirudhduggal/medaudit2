@@ -11,7 +11,7 @@ import http.server
 import socketserver
 from typing import Optional
 from datetime import datetime
-from config.logging import ProxyLogger
+from medaudit.config.logging import ProxyLogger
 
 
 # MLLP framing characters

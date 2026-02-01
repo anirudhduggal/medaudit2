@@ -1,8 +1,14 @@
 """
-PII Detection Module for Medaudit 2.0
+PII Detection Module - NLP + Pattern-Based Entity Recognition
 AI Agent Instructions:
-- This module handles detection of Personally Identifiable Information
-- Uses Presidio for PII detection
+- Main function: detect_pii(payload, analyzer=None) -> list[str]
+- Detection methods: Presidio NLP engine for entity recognition
+  * Supported entities: PERSON, EMAIL, PHONE_NUMBER, CREDIT_CARD, SSN, etc.
+- Analyzer initialization: Use create_analyzer() for cached Presidio instance
+  * First call: Downloads spacy model (en_core_web_lg) - requires internet
+  * Subsequent calls: Uses cached model
+- Output format: ["ENTITY_TYPE: value", ...] from Presidio
+- Error handling: Gracefully handles decode errors, never crashes
 - Call detect_pii() with raw payload bytes to analyze for PII
 """
 import logging

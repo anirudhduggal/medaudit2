@@ -1,26 +1,199 @@
 # Medaudit 2.0 — AI Agent Instructions
 
-Medical device security analyzer for HL7/FHIR traffic. Detects encryption status, extracts HL7 v2.x messages, identifies PII exposure using Presidio NLP + regex patterns.
+Medical device security analyzer for HL7/FHIR traffic. Detects encryption status, extracts HL7 v2.x messages, identifies PII exposure using Presidio NLP + regex patterns. Features a full-stack web UI with authentication, project management, HL7 client/fuzzer, traffic analysis with visualization, and PDF/JSON export.
 
 ## Architecture Overview
 ```
 medaudit/
-├── __main__.py                    # CLI dispatcher (analyze|web|proxy|config)
+├── __main__.py                        # CLI dispatcher (analyze|web|proxy|config|fuzzer)
+├── paths.py                           # ★ Centralized path management (data, config, logs)
 ├── analysis/
 │   ├── traffic/traffic_analysis.py   # PCAP parsing, encryption heuristics, HL7 extraction
 │   └── pii/pii_check.py              # Presidio analyzer + custom recognizers
 ├── proxy/proxy_server.py             # HTTP→HL7 converter for Burp/ZAP testing
-├── hl7server/hl7_mock_server.py      # MLLP-compliant mock server with ACK responses
-└── web/app.py                        # FastAPI: POST /api/analyze, GET /
+├── hl7server/
+│   ├── hl7_mock_server.py            # MLLP-compliant mock server with ACK responses
+│   ├── hl7_client.py                 # HL7 client for sending messages
+│   ├── message_logger.py             # JSON Lines message logging
+│   └── cli.py                        # HL7 server CLI interface
+├── fuzzer/                           # ★ Dedicated Medical Device Fuzzer Module
+│   ├── __init__.py                   # Module exports
+│   ├── __main__.py                   # CLI entry point (python -m medaudit.fuzzer)
+│   ├── cli.py                        # Fuzzer CLI commands (run, test, template, validate, server, attacks)
+│   ├── strategies.py                 # Mutation strategies (field, segment, delimiter, overflow, injection)
+│   ├── engine.py                     # Fuzzing execution engine + message generation
+│   ├── protocol.py                   # HL7/MLLP protocol handling
+│   ├── templates.py                  # Default fuzzing config templates (YAML/JSON)
+│   └── malicious_hl7_server.py       # ★ Malicious HL7 server (17 attack modes)
+├── config/                           # ★ Package configuration (inside medaudit)
+│   ├── medaudit.json                 # Main configuration file
+│   └── hl7server.json                # HL7 server configuration
+├── data/                             # ★ Runtime data (inside medaudit)
+│   ├── medaudit.db                   # SQLite database
+│   └── artifacts/                    # Project artifacts (PCAPs, etc.)
+├── logs/                             # ★ Runtime logs (inside medaudit)
+└── web/
+    ├── app.py                        # FastAPI main app + page routes
+    ├── auth.py                       # User authentication + session management
+    ├── database.py                   # SQLAlchemy models (User, Project, Analysis, etc.)
+    ├── projects.py                   # Project CRUD API (/api/projects)
+    ├── client_api.py                 # HL7 Client API + malformed payload library
+    ├── fuzzer_api.py                 # HL7 Fuzzer Web API (imports from fuzzer module)
+    ├── traffic_api.py                # PCAP upload + analysis + visualization
+    ├── server_api.py                 # Managed HL7 server instances
+    ├── export_api.py                 # PDF/JSON report generation
+    ├── analyzer.py                   # Enhanced PCAP analyzer for web UI
+    └── templates/                    # Jinja2 HTML templates
+        ├── index.html                # Landing page
+        ├── login.html                # User login
+        ├── register.html             # User registration
+        ├── dashboard.html            # Project listing + management
+        └── project.html              # Project detail (Client/Fuzzer/Traffic tabs)
 ```
 
 ## Essential Commands
 ```bash
+# CLI Analysis
 python3 -m medaudit analyze <file.pcap>           # Analyze PCAP for encryption + PII
-python3 -m medaudit web --port 8080               # Start web UI
-python3 -m medaudit proxy --hl7-port 2575         # HTTP→HL7 proxy for security testing
-python3 -m medaudit.hl7server start --port 2575   # Mock HL7 server (separate module)
+
+# Web UI (Full Platform)
+python3 -m medaudit web --host 0.0.0.0 --port 8080  # Start web UI (default: http://localhost:8080)
+
+# HTTP→HL7 Proxy (Security Testing)
+python3 -m medaudit proxy --port 8080 --hl7-port 2575  # For Burp/ZAP integration
+
+# HL7 Mock Server (Standalone)
+python3 -m medaudit.hl7server start --port 2575   # MLLP server with ACK responses
+
+# ★ HL7 Fuzzer (Standalone CLI)
+python3 -m medaudit.fuzzer run -c config.yaml -o results.json   # Run fuzzing from config
+python3 -m medaudit.fuzzer test --host localhost --port 2575    # Test HL7 server connection
+python3 -m medaudit.fuzzer template --format yaml > fuzzer.yaml # Generate config template
+python3 -m medaudit.fuzzer validate -c config.yaml              # Validate fuzzing config
+
+# ★ Malicious HL7 Server (Medical Device Robustness Testing)
+python3 -m medaudit.fuzzer server --mode no_ack --port 2575     # No ACK response
+python3 -m medaudit.fuzzer server --mode broken_ack             # Malformed ACK messages
+python3 -m medaudit.fuzzer server --mode flood_ack --flood-count 500  # ACK flood attack
+python3 -m medaudit.fuzzer server --mode delayed_ack --delay 30 # Delayed ACK (30s)
+python3 -m medaudit.fuzzer server --mode overflow_ack           # Buffer overflow test
+python3 -m medaudit.fuzzer server --mode injection_ack          # Injection payloads in ACK
+python3 -m medaudit.fuzzer server --mode random                 # Random attack per connection
+python3 -m medaudit.fuzzer attacks                              # List all attack modes
+
+# Configuration
+python3 -m medaudit config --show                 # Display current config
+python3 -m medaudit config --create               # Generate default config file
 ```
+
+## Web UI Features & API Reference
+
+### Authentication (`/auth/*`)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/auth/login` | POST | User login (username, password) → session cookie |
+| `/auth/register` | POST | Create account (username, email, password) |
+| `/auth/logout` | POST | End session |
+| `/auth/me` | GET | Current user info |
+| `/auth/check` | GET | Check authentication status |
+
+### Project Management (`/api/projects/*`)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/projects` | GET | List all projects for user |
+| `/api/projects` | POST | Create project (name, description, engagement dates) |
+| `/api/projects/{id}` | GET | Get project details |
+| `/api/projects/{id}` | PUT | Update project |
+| `/api/projects/{id}` | DELETE | Delete project + all artifacts |
+| `/api/projects/{id}/stats` | GET | Project statistics summary |
+| `/api/projects/{id}/duplicate` | POST | Clone project |
+
+### HL7 Client (`/api/client/*`)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/client/payloads` | GET | Malformed payload library (buffer overflow, SQLi, XSS, etc.) |
+| `/api/client/templates` | GET | HL7 message templates (ADT, ORM, ORU) |
+| `/api/client/send` | POST | Send HL7 message to target server |
+| `/api/client/projects/{id}/sessions` | POST | Create client session |
+| `/api/client/projects/{id}/sessions` | GET | List sessions |
+| `/api/client/projects/{id}/sessions/{sid}/history` | GET | Message history |
+| `/api/client/projects/{id}/sessions/{sid}/send` | POST | Send via session |
+
+### HL7 Fuzzer (`/api/fuzzer/*`)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/fuzzer/templates` | GET | Fuzzing rule templates (YAML/JSON) |
+| `/api/fuzzer/validate` | POST | Validate fuzzing config |
+| `/api/fuzzer/projects/{id}/jobs` | POST | Start fuzzing job |
+| `/api/fuzzer/projects/{id}/jobs` | GET | List fuzzing jobs |
+| `/api/fuzzer/projects/{id}/jobs/{jid}` | GET | Job details + results |
+| `/api/fuzzer/projects/{id}/jobs/{jid}/stop` | POST | Stop running job |
+| `/api/fuzzer/projects/{id}/jobs/{jid}` | DELETE | Delete job |
+
+### Traffic Analysis (`/api/traffic/*`)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/traffic/projects/{id}/upload` | POST | Upload + analyze PCAP |
+| `/api/traffic/projects/{id}/analyses` | GET | List all analyses |
+| `/api/traffic/projects/{id}/analyses/{aid}` | GET | Full analysis results |
+| `/api/traffic/projects/{id}/analyses/{aid}/graph` | GET | Network graph (Cytoscape.js) |
+| `/api/traffic/projects/{id}/analyses/{aid}/sequence` | GET | Sequence diagram data |
+| `/api/traffic/projects/{id}/analyses/{aid}` | DELETE | Delete analysis |
+| `/api/traffic/projects/{id}/summary` | GET | Aggregated stats |
+
+### Server Management (`/api/server/*`)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/server/projects/{id}/servers` | POST | Create managed HL7 server |
+| `/api/server/projects/{id}/servers` | GET | List servers |
+| `/api/server/projects/{id}/servers/{sid}` | GET | Server details |
+| `/api/server/projects/{id}/servers/{sid}` | PUT | Update server config |
+| `/api/server/projects/{id}/servers/{sid}/start` | POST | Start server |
+| `/api/server/projects/{id}/servers/{sid}/stop` | POST | Stop server |
+| `/api/server/projects/{id}/servers/{sid}` | DELETE | Delete server |
+| `/api/server/projects/{id}/servers/{sid}/logs` | GET | Server message logs |
+
+### Export (`/api/export/*`)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/export/projects/{id}/pdf` | GET | Generate PDF security report |
+| `/api/export/projects/{id}/json` | GET | Export project as JSON |
+
+### Health Check
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/health` | GET | Service health status |
+
+## Database Models (SQLite)
+```python
+# User: Authentication + projects
+User(id, username, email, password_hash, full_name, is_admin, is_active)
+
+# Project: Workspace for security audits
+Project(id, name, description, owner_id, engagement_start/end, status, settings)
+
+# PcapAnalysis: Traffic analysis results
+PcapAnalysis(id, project_id, filename, file_path, results, total_packets, hl7_message_count, pii_count)
+
+# ClientSession: HL7 client interaction history
+ClientSession(id, project_id, server_host, server_port, use_tls, messages)
+
+# FuzzingJob: Fuzzer execution + results
+FuzzingJob(id, project_id, name, config, status, results, started_at, completed_at)
+
+# ServerInstance: Managed HL7 servers
+ServerInstance(id, project_id, name, host, port, use_tls, cert_path, key_path, status)
+```
+
+## Malformed Payload Library (Built-in)
+The HL7 Client includes pre-built security test payloads:
+- **Buffer Overflow**: Long fields, large segments, excessive segment count
+- **Format String**: %n, %s, %x attacks in HL7 fields
+- **SQL Injection**: Basic SQLi, UNION, stacked queries in PID segment
+- **Command Injection**: OS command injection payloads
+- **XXE/XML**: XML entity expansion (for XML-based HL7)
+- **Delimiter Attacks**: Mutated |, ^, ~ delimiters
+- **Encoding Attacks**: Unicode, null bytes, control characters
 
 ## Critical Code Patterns
 
@@ -55,6 +228,23 @@ PII is extracted using two methods:
 - SSL ports (443, 993, 995, 465, 587, 8443) → encrypted
 - Payload entropy > 0.8 → likely encrypted (high unique byte ratio)
 
+### Authentication Pattern (Web APIs)
+```python
+from .auth import require_auth
+from .database import get_db, User
+
+@router.get("/protected")
+async def protected_endpoint(
+    user: User = Depends(require_auth),  # Raises 401 if not authenticated
+    db: Session = Depends(get_db)
+):
+    # Access user.id for ownership checks
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.owner_id == user.id  # Enforce ownership
+    ).first()
+```
+
 ## Error Handling Pattern (Required)
 All modules must log errors and continue gracefully—never crash on bad input:
 ```python
@@ -72,14 +262,38 @@ except Exception as e:
 - **HL7 parsing**: Return partial results if segments are malformed
 - **PII detection**: Catch Presidio/Spacy errors, return empty results
 - **Network ops**: Use timeouts, log connection failures, return graceful error responses
+- **Web APIs**: Return HTTPException with appropriate status codes
 
 ## Configuration Precedence
-CLI args → `config/medaudit.json` → `./medaudit.json` → `~/.medaudit.json` → defaults
+CLI args → `medaudit/config/medaudit.json` → `config/medaudit.json` → `./medaudit.json` → `~/.medaudit.json` → defaults
+
+## Data Storage (Centralized in medaudit Package)
+All runtime data is stored inside the medaudit package directory:
+- **Database**: `medaudit/data/medaudit.db` (SQLite)
+- **PCAP Artifacts**: `medaudit/data/artifacts/projects/{project_id}/pcaps/`
+- **Logs**: `medaudit/logs/YYYY-MM-DD/*.jsonl` (JSON Lines format)
+- **Configuration**: `medaudit/config/medaudit.json`, `medaudit/config/hl7server.json`
+
+### Path Management (medaudit/paths.py)
+All path references use the centralized `medaudit.paths` module:
+```python
+from medaudit.paths import (
+    PACKAGE_DIR,      # medaudit/ package directory
+    DATA_DIR,         # medaudit/data/
+    CONFIG_DIR,       # medaudit/config/
+    LOGS_DIR,         # medaudit/logs/
+    DATABASE_PATH,    # medaudit/data/medaudit.db
+    get_artifacts_dir,       # Returns medaudit/data/artifacts/
+    get_project_pcaps_dir,   # Returns medaudit/data/artifacts/projects/{id}/pcaps/
+    get_database_path,       # Returns database path (creates dirs if needed)
+    get_config_search_paths, # Returns config file search order
+)
+```
 
 ## Output Limits (Enforced)
-- Max 10 HL7 messages displayed per analysis
-- Max 20 PII instances reported
-- Logs: JSON Lines in `logs/YYYY-MM-DD/*.jsonl`
+- Max 10 HL7 messages displayed per CLI analysis
+- Max 20 PII instances reported per CLI analysis
+- Web UI: Paginated results with full data available via API
 
 ## Testing & Verification
 
@@ -101,7 +315,7 @@ python3 tests/analyze_pcap_pii.py        # Manual PCAP→PII pipeline test
 pytest -q                                # Run all pytest-compatible tests
 ```
 
-### End-to-End Workflow Test
+### End-to-End Workflow Test (CLI)
 ```bash
 # Terminal 1: Start HL7 server
 python3 -m medaudit.hl7server start --port 2575
@@ -111,6 +325,18 @@ python3 -m medaudit proxy --port 8080 --hl7-port 2575
 
 # Terminal 3: Send test message
 curl -X POST http://localhost:8080/ -d 'MSH|^~\&|TEST|LAB|EHR|HOSP|202601311200||ADT^A01|MSG001|P|2.5'
+```
+
+### Web UI Testing
+```bash
+# Start web server
+python3 -m medaudit web --port 8080
+
+# Access UI
+open http://localhost:8080
+
+# Default admin account created on first start (check logs for credentials)
+# Or register a new account at /register
 ```
 
 ## Setup (Post-clone)
@@ -125,3 +351,7 @@ python -m spacy download en_core_web_lg  # Required for Presidio NLP
 3. MLLP framing is mandatory for HL7 device communication
 4. Presidio analyzer uses Spacy `en_core_web_lg`—slow to initialize, cache it
 5. Log all errors with context, never let exceptions crash the program
+6. All web API endpoints require authentication (except /auth/login, /auth/register)
+7. Project ownership is enforced—users can only access their own projects
+8. Use `require_auth` dependency for protected endpoints
+9. Database sessions managed via `get_db` dependency injection

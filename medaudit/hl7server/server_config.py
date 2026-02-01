@@ -3,7 +3,8 @@ Configuration Module for HL7 Server
 
 This module handles loading and managing configuration for the HL7 mock server.
 Configuration can be loaded from:
-- hl7server.json in current directory
+- medaudit/config/hl7server.json (package config directory)
+- hl7server.json in current directory (backwards compatible)
 - ~/.hl7server.json in user home
 - ~/.config/hl7server.json in XDG config directory
 - Command line arguments override file values
@@ -13,6 +14,14 @@ import json
 import os
 from pathlib import Path
 from typing import Optional, Dict, Any
+
+# Import centralized paths
+try:
+    from medaudit.paths import CONFIG_DIR, LOGS_DIR
+except ImportError:
+    # Fallback if paths module not available
+    CONFIG_DIR = Path(__file__).parent.parent / "config"
+    LOGS_DIR = Path(__file__).parent.parent / "logs"
 
 
 class ServerConfig:
@@ -29,7 +38,7 @@ class ServerConfig:
         },
         "logging": {
             "enabled": True,
-            "log_dir": "logs/hl7server"
+            "log_dir": str(LOGS_DIR / "hl7server")
         }
     }
 
@@ -51,9 +60,10 @@ class ServerConfig:
         if config_file:
             config_paths.append(Path(config_file))
 
-        # Standard locations
+        # Standard locations (package config first, then cwd for backwards compat)
         config_paths.extend([
-            Path.cwd() / "hl7server.json",
+            CONFIG_DIR / "hl7server.json",  # Package config directory
+            Path.cwd() / "hl7server.json",  # Backwards compatible
             Path.home() / ".hl7server.json",
             Path.home() / ".config" / "hl7server.json"
         ])
@@ -91,13 +101,13 @@ class ServerConfig:
         Create a default configuration file.
 
         Args:
-            path: Optional path to create config file at (default: ./hl7server.json)
+            path: Optional path to create config file at (default: medaudit/config/hl7server.json)
 
         Returns:
             Path to created configuration file
         """
         if path is None:
-            path = Path.cwd() / "hl7server.json"
+            path = CONFIG_DIR / "hl7server.json"
         else:
             path = Path(path)
 
@@ -141,7 +151,7 @@ class ServerConfig:
             path: Optional path to save config file to
         """
         if path is None:
-            path = Path.cwd() / "hl7server.json"
+            path = CONFIG_DIR / "hl7server.json"
         else:
             path = Path(path)
 

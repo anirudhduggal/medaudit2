@@ -12,11 +12,12 @@ from sqlalchemy.orm import Session
 
 from .database import get_db, Project, User, PcapAnalysis
 from .auth import require_auth
+from medaudit.paths import get_artifacts_dir
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
-# Configurable artifacts path
-ARTIFACTS_BASE_PATH = Path.cwd() / "data" / "artifacts"
+# Configurable artifacts path (from centralized paths module)
+ARTIFACTS_BASE_PATH = get_artifacts_dir()
 
 
 class ProjectCreate(BaseModel):

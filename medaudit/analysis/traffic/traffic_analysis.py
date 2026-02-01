@@ -1,10 +1,15 @@
 """
-Traffic Analysis Module for Medaudit 2.0
+Traffic Analysis Module - PCAP Parser and Encryption Detector
 AI Agent Instructions:
-- This module handles PCAP file parsing and encryption analysis
-- It detects TLS/SSL layers for encryption status
-- Extracts unencrypted payloads for HL7 and PII analysis
-- Use this module when analyzing network traffic captures
+- Main entry point: analyze_pcap(pcap_file) -> analyzes and prints results
+- Encryption detection: Uses SSL/TLS ports + payload entropy analysis
+  * SSL ports: 443, 993, 995, 465, 587, 8443
+  * Entropy threshold: > 0.8 indicates encryption
+- HL7 detection: Identifies MSH| frame start marker in unencrypted traffic
+- PII detection: Calls pii_check.detect_pii() on each unencrypted payload
+- Output: Prints encryption status, HL7 count, and PII instances
+- Dependencies: scapy, ..pii.pii_check module
+- Error handling: Gracefully handles malformed packets, never crashes
 """
 
 from scapy.all import rdpcap, TCP, UDP, Raw

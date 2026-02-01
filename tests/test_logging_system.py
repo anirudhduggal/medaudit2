@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Test script for logging system functionality"""
 
-from config.logging import ProxyLogger
+from medaudit.config.logging import ProxyLogger
 from pathlib import Path
 
 def test_logging():
@@ -11,29 +11,27 @@ def test_logging():
     logger.log_http_request(
         method='POST',
         path='/api/test',
-        headers={'Content-Type': 'application/json'},
-        body='test body',
+        content_length=9,
         client_ip='192.168.1.1'
     )
     
     # Test HL7 conversion logging
     logger.log_hl7_conversion(
-        'http://test',
-        'MSH|^~\\&|TEST|LAB|EHR|HOSP|202601251200||ADT^A01|MSG123|P|2.5'
+        original_length=100,
+        hl7_length=120,
+        hl7_message_start='MSH|^~\\&|TEST|LAB|EHR|HOSP|202601251200||ADT^A01|MSG123|P|2.5'
     )
     
     # Test HL7 response logging
     logger.log_hl7_response(
-        hl7_host='localhost',
-        hl7_port=2575,
-        response='MSA|AA|MSG123',
-        success=True
+        status='success',
+        response_length=20,
+        hl7_ack=b'MSA|AA|MSG123'
     )
     
     # Test proxy error logging
-    logger.log_proxy_error(
-        error_type='test_error',
-        error_message='Test error message'
+    logger.log_error(
+        message='Test error message'
     )
     
     print('✓ Logging test completed successfully!')

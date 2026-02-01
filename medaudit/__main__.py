@@ -15,7 +15,7 @@ import argparse
 import json
 from .analysis import analyze_pcap
 from .proxy import start_proxy
-from config import config
+from .config import config
 
 def main():
     parser = argparse.ArgumentParser(description='Medaudit 2.0 - Medical Device Security Tool')

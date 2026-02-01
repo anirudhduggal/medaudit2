@@ -4,14 +4,18 @@
 from medaudit.analysis.traffic.traffic_analysis import is_hl7_message
 from medaudit.analysis.pii.pii_check import create_analyzer, detect_pii
 from scapy.all import rdpcap, Raw
+from pathlib import Path
 
 print("\n" + "=" * 80)
 print("MEDAUDIT PII DETECTION TEST - HL7 SYNTHETIC PCAP")
 print("=" * 80 + "\n")
 
-# Load PCAP file
+# Load PCAP file (use fixture or compute path from project root)
 print("1. Loading PCAP file...")
-packets = rdpcap('medaudit/testFiles/hl7_v2_unencrypted_synthetic.pcap')
+# Get workspace root (one level up from tests/)
+workspace_root = Path(__file__).parent.parent
+pcap_path = workspace_root / 'medaudit' / 'testFiles' / 'hl7_v2_unencrypted_synthetic.pcap'
+packets = rdpcap(str(pcap_path))
 print(f"   Total packets: {len(packets)}")
 
 # Extract payload

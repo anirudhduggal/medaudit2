@@ -3,8 +3,13 @@
 
 from scapy.all import rdpcap, Raw
 from medaudit.analysis.pii.pii_check import create_analyzer
+from pathlib import Path
 
-packets = rdpcap('medaudit/testFiles/hl7_v2_unencrypted_synthetic.pcap')
+# Get workspace root (one level up from tests/)
+workspace_root = Path(__file__).parent.parent
+pcap_path = workspace_root / 'medaudit' / 'testFiles' / 'hl7_v2_unencrypted_synthetic.pcap'
+
+packets = rdpcap(str(pcap_path))
 payload = packets[0][Raw].load
 
 print("\n" + "=" * 80)

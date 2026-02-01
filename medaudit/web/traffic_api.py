@@ -15,11 +15,12 @@ from sqlalchemy.orm import Session
 from .database import get_db, Project, PcapAnalysis, User
 from .auth import require_auth
 from .analyzer import analyze_pcap_detailed
+from medaudit.paths import get_artifacts_dir
 
 router = APIRouter(prefix="/api/traffic", tags=["traffic"])
 
-# Artifacts base path
-ARTIFACTS_BASE_PATH = Path.cwd() / "data" / "artifacts"
+# Artifacts base path (from centralized paths module)
+ARTIFACTS_BASE_PATH = get_artifacts_dir()
 
 
 def generate_network_graph(analysis_results: dict) -> dict:
