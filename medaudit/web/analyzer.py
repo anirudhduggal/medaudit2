@@ -325,24 +325,211 @@ def extract_patient_info(pid_fields: List[str]) -> Dict:
     if len(pid_fields) > 13 and pid_fields[13]:
         info["phone_home"] = pid_fields[13]
     
+    if len(pid_fields) > 14 and pid_fields[14]:
+        info["phone_business"] = pid_fields[14]
+    
     if len(pid_fields) > 19 and pid_fields[19]:
         info["ssn"] = pid_fields[19]
     
+    if len(pid_fields) > 20 and pid_fields[20]:
+        info["drivers_license"] = pid_fields[20]
+    
     return info
+
+
+def extract_pii_from_hl7(hl7_text: str) -> List[Dict]:
+    """
+    Extract PII directly from HL7 message by parsing PID segment fields.
+    This is more reliable than NLP for structured HL7 data.
+    
+    Also extracts MSH-7 timestamp to distinguish same PII at different times.
+    
+    PID Segment Field Positions (0-indexed after segment name):
+    - PID-3: Patient ID
+    - PID-5: Patient Name (LAST^FIRST^MIDDLE)
+    - PID-7: Date of Birth
+    - PID-8: Sex
+    - PID-11: Address
+    - PID-13: Phone (Home)
+    - PID-14: Phone (Business)
+    - PID-19: SSN
+    - PID-20: Driver's License
+    """
+    pii_found = []
+    message_timestamp = None
+    
+    # Parse segments
+    segment_delimiters = ['\r\n', '\r', '\n']
+    segments_raw = None
+    for delim in segment_delimiters:
+        if delim in hl7_text:
+            segments_raw = hl7_text.split(delim)
+            break
+    
+    if not segments_raw:
+        segments_raw = [hl7_text]
+    
+    # First pass: extract MSH timestamp
+    for segment_str in segments_raw:
+        segment_str = segment_str.strip()
+        if not segment_str:
+            continue
+        fields = segment_str.split('|')
+        segment_name = fields[0] if fields else ""
+        
+        if segment_name == "MSH" and len(fields) > 6 and fields[6]:
+            # MSH-7: Message Date/Time (format: YYYYMMDDHHMMSS or YYYYMMDDHHMM)
+            ts = fields[6]
+            if len(ts) >= 12:
+                message_timestamp = f"{ts[:4]}-{ts[4:6]}-{ts[6:8]} {ts[8:10]}:{ts[10:12]}"
+                if len(ts) >= 14:
+                    message_timestamp += f":{ts[12:14]}"
+            elif len(ts) >= 8:
+                message_timestamp = f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}"
+            break
+    
+    # Second pass: extract PII from PID segment
+    for segment_str in segments_raw:
+        segment_str = segment_str.strip()
+        if not segment_str:
+            continue
+        
+        fields = segment_str.split('|')
+        segment_name = fields[0] if fields else ""
+        
+        # Extract PII from PID segment
+        if segment_name == "PID":
+            # PID-5: Patient Name
+            if len(fields) > 5 and fields[5]:
+                name_parts = fields[5].split('^')
+                full_name = " ".join(filter(None, [
+                    name_parts[1] if len(name_parts) > 1 else "",  # First
+                    name_parts[2] if len(name_parts) > 2 else "",  # Middle
+                    name_parts[0] if len(name_parts) > 0 else ""   # Last
+                ]))
+                if full_name.strip():
+                    pii_found.append({
+                        "entity_type": "PERSON",
+                        "value": full_name.strip(),
+                        "score": 1.0,
+                        "source": "HL7_PID-5",
+                        "timestamp": message_timestamp
+                    })
+            
+            # PID-7: Date of Birth
+            if len(fields) > 7 and fields[7]:
+                dob = fields[7]
+                # Format YYYYMMDD or YYYYMMDDHHMMSS
+                if len(dob) >= 8:
+                    formatted_dob = f"{dob[:4]}-{dob[4:6]}-{dob[6:8]}"
+                    pii_found.append({
+                        "entity_type": "DATE_OF_BIRTH",
+                        "value": formatted_dob,
+                        "score": 1.0,
+                        "source": "HL7_PID-7",
+                        "timestamp": message_timestamp
+                    })
+            
+            # PID-11: Address
+            if len(fields) > 11 and fields[11]:
+                addr_parts = fields[11].split('^')
+                # Address format: STREET^CITY^STATE^ZIP^COUNTRY
+                address_components = []
+                if len(addr_parts) > 0 and addr_parts[0]:
+                    address_components.append(addr_parts[0])  # Street
+                if len(addr_parts) > 1 and addr_parts[1]:
+                    address_components.append(addr_parts[1])  # City
+                if len(addr_parts) > 2 and addr_parts[2]:
+                    address_components.append(addr_parts[2])  # State
+                if len(addr_parts) > 3 and addr_parts[3]:
+                    address_components.append(addr_parts[3])  # ZIP
+                
+                if address_components:
+                    pii_found.append({
+                        "entity_type": "ADDRESS",
+                        "value": ", ".join(address_components),
+                        "score": 1.0,
+                        "source": "HL7_PID-11",
+                        "timestamp": message_timestamp
+                    })
+            
+            # PID-13: Phone (Home)
+            if len(fields) > 13 and fields[13]:
+                phone = fields[13].split('^')[0]  # Take first component
+                if phone:
+                    pii_found.append({
+                        "entity_type": "PHONE_NUMBER",
+                        "value": phone,
+                        "score": 1.0,
+                        "source": "HL7_PID-13",
+                        "timestamp": message_timestamp
+                    })
+            
+            # PID-14: Phone (Business)
+            if len(fields) > 14 and fields[14]:
+                phone = fields[14].split('^')[0]
+                if phone:
+                    pii_found.append({
+                        "entity_type": "PHONE_NUMBER",
+                        "value": phone,
+                        "score": 1.0,
+                        "source": "HL7_PID-14",
+                        "timestamp": message_timestamp
+                    })
+            
+            # PID-19: SSN
+            if len(fields) > 19 and fields[19]:
+                ssn = fields[19]
+                if ssn:
+                    pii_found.append({
+                        "entity_type": "US_SSN",
+                        "value": ssn,
+                        "score": 1.0,
+                        "source": "HL7_PID-19",
+                        "timestamp": message_timestamp
+                    })
+            
+            # PID-20: Driver's License
+            if len(fields) > 20 and fields[20]:
+                dl = fields[20]
+                if dl:
+                    pii_found.append({
+                        "entity_type": "US_DRIVER_LICENSE",
+                        "value": dl,
+                        "score": 1.0,
+                        "source": "HL7_PID-20",
+                        "timestamp": message_timestamp
+                    })
+            
+            # PID-3: Patient ID (MRN)
+            if len(fields) > 3 and fields[3]:
+                mrn = fields[3].split('^')[0]  # Take ID part
+                if mrn:
+                    pii_found.append({
+                        "entity_type": "MEDICAL_RECORD_NUMBER",
+                        "value": mrn,
+                        "score": 1.0,
+                        "source": "HL7_PID-3",
+                        "timestamp": message_timestamp
+                    })
+    
+    return pii_found
 
 
 def detect_pii_in_text(text: str, analyzer=None) -> List[Dict]:
     """
     Detect PII in text using Presidio analyzer.
+    Filters out false positives common in HL7 messages.
     
     Args:
         text: Text to analyze
         analyzer: Presidio analyzer instance (optional)
         
     Returns:
-        List of detected PII with entity type and value
+        List of detected PII with entity type and value (deduplicated)
     """
     pii_found = []
+    seen = set()  # Track (entity_type, value) pairs to avoid duplicates
     
     if analyzer is None:
         analyzer = get_pii_analyzer()
@@ -351,17 +538,77 @@ def detect_pii_in_text(text: str, analyzer=None) -> List[Dict]:
         try:
             results = analyzer.analyze(text=text, language='en')
             for result in results:
-                pii_found.append({
-                    "entity_type": result.entity_type,
-                    "value": text[result.start:result.end],
-                    "score": round(result.score, 2),
-                    "start": result.start,
-                    "end": result.end
-                })
+                value = text[result.start:result.end]
+                
+                # Filter out false positives common in HL7 messages
+                if _is_false_positive_pii(result.entity_type, value):
+                    continue
+                
+                # Create a unique key for deduplication
+                key = (result.entity_type, value)
+                if key not in seen:
+                    seen.add(key)
+                    pii_found.append({
+                        "entity_type": result.entity_type,
+                        "value": value,
+                        "score": round(result.score, 2),
+                        "start": result.start,
+                        "end": result.end
+                    })
         except Exception as e:
             print(f"PII analysis error: {e}")
     
     return pii_found
+
+
+def _is_false_positive_pii(entity_type: str, value: str) -> bool:
+    """
+    Check if a detected PII is likely a false positive in HL7 context.
+    
+    Common false positives:
+    - HL7 timestamps (YYYYMMDDHHMMSS) detected as bank numbers or driver's licenses
+    - HL7 message type codes (O01, A01) detected as driver's licenses
+    - Segment markers detected as various PII
+    - Very long values containing pipe characters (HL7 segment data)
+    """
+    # Skip if value contains HL7 delimiters (likely segment data, not real PII)
+    if '|' in value or '^' in value:
+        return True
+    
+    # Skip very long values (likely not real PII)
+    if len(value) > 100:
+        return True
+    
+    # Skip HL7 timestamps detected as bank numbers or driver's licenses
+    # Timestamps are typically 8-14 digits: YYYYMMDD or YYYYMMDDHHMMSS
+    if entity_type in ('US_BANK_NUMBER', 'US_DRIVER_LICENSE'):
+        # Pure numeric values that look like dates/timestamps
+        if value.isdigit():
+            if len(value) == 8:  # YYYYMMDD
+                # Check if it looks like a date (year between 1900-2100)
+                try:
+                    year = int(value[:4])
+                    month = int(value[4:6])
+                    day = int(value[6:8])
+                    if 1900 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31:
+                        return True
+                except ValueError:
+                    pass
+            elif len(value) in (12, 14):  # YYYYMMDDHHMM or YYYYMMDDHHMMSS
+                try:
+                    year = int(value[:4])
+                    if 1900 <= year <= 2100:
+                        return True
+                except ValueError:
+                    pass
+    
+    # Skip HL7 message type codes detected as driver's licenses
+    # Common codes: A01, O01, R01, etc.
+    if entity_type == 'US_DRIVER_LICENSE':
+        if len(value) <= 3 and value[0].isalpha():
+            return True
+    
+    return False
 
 
 def is_likely_encrypted(payload: bytes) -> bool:
@@ -496,12 +743,34 @@ def analyze_pcap_detailed(pcap_file: str) -> Dict[str, Any]:
                 parsed["destination"] = f"{dst_ip}:{dst_port}"
                 hl7_messages.append(parsed)
                 
-                # Detect PII in the HL7 message
-                pii_results = detect_pii_in_text(hl7_text, analyzer)
-                for pii in pii_results:
+                # Extract PII using HL7 PID segment parsing (more reliable for structured data)
+                hl7_pii = extract_pii_from_hl7(hl7_text)
+                for pii in hl7_pii:
                     pii["source_message"] = len(hl7_messages)
                     pii["packet_index"] = i
                     all_pii.append(pii)
+                
+                # Get message timestamp for NLP results
+                msg_timestamp = None
+                for existing_pii in hl7_pii:
+                    if existing_pii.get("timestamp"):
+                        msg_timestamp = existing_pii["timestamp"]
+                        break
+                
+                # Also run Presidio NLP for any PII not in standard HL7 fields
+                nlp_pii = detect_pii_in_text(hl7_text, analyzer)
+                for pii in nlp_pii:
+                    # Avoid duplicates within same message - check if value already found
+                    # Note: Same value at different timestamps is NOT a duplicate
+                    if not any(existing["value"] == pii["value"] and 
+                              existing["entity_type"] == pii["entity_type"] and
+                              existing.get("timestamp") == msg_timestamp
+                              for existing in all_pii):
+                        pii["source_message"] = len(hl7_messages)
+                        pii["packet_index"] = i
+                        pii["source"] = "NLP"
+                        pii["timestamp"] = msg_timestamp
+                        all_pii.append(pii)
     
     # Calculate encryption status
     total_analyzed = encrypted_packets + unencrypted_packets

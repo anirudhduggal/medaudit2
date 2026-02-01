@@ -37,11 +37,18 @@ payload = pkt[Raw].load.decode('utf-8', errors='ignore')  # NEVER omit errors='i
 if 'MSH|' in payload:  # Validate before parsing as HL7
 ```
 
-### PII Detection (Cache Analyzer Instance)
+### PII Detection (HL7 Parsing + NLP)
+PII is extracted using two methods:
+1. **HL7 PID Segment Parsing** (score: 1.0, preferred for structured data)
+2. **Presidio NLP** (fallback for non-standard fields)
+
 ```python
-from medaudit.analysis.pii.pii_check import create_analyzer
-analyzer = create_analyzer()  # Expensive—reuse this instance
-results = analyzer.analyze(text=payload, language='en')
+# HL7 PID field positions for PII:
+# PID-3: Medical Record Number, PID-5: Name, PID-7: DOB
+# PID-11: Address, PID-13/14: Phone, PID-19: SSN, PID-20: Driver's License
+
+# MSH-7 timestamp is captured to distinguish same PII at different times
+# Deduplication uses (entity_type, value, timestamp) tuple
 ```
 
 ### Encryption Detection Heuristics

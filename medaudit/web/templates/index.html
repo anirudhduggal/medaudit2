@@ -235,6 +235,8 @@
         .pii-item {
             display: flex;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
             padding: 0.75rem 1rem;
             background: #fff;
             border: 1px solid #fecaca;
@@ -249,7 +251,6 @@
             border-radius: 50px;
             font-size: 0.75rem;
             font-weight: 600;
-            margin-right: 1rem;
             white-space: nowrap;
         }
         
@@ -263,6 +264,153 @@
             font-size: 0.8rem;
         }
         
+        .pii-timestamp {
+            color: #0369a1;
+            font-size: 0.75rem;
+            background: #e0f2fe;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+        
+        .pii-timestamp i {
+            margin-right: 0.25rem;
+        }
+        
+        .pii-source {
+            color: #6b7280;
+            font-size: 0.7rem;
+            background: #f3f4f6;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+        }
+        
+        /* Collapsible PII Styles */
+        .pii-summary {
+            margin-bottom: 1rem;
+        }
+        
+        .pii-summary-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(135deg, #fef2f2, #fee2e2);
+            border: 1px solid #fecaca;
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .pii-summary-header:hover {
+            background: linear-gradient(135deg, #fee2e2, #fecaca);
+        }
+        
+        .pii-summary-info {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        
+        .pii-summary-types {
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+        
+        .pii-toggle-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #dc2626;
+            color: #fff;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .pii-toggle-btn:hover {
+            background: #b91c1c;
+        }
+        
+        .pii-details {
+            display: none;
+            margin-top: 1rem;
+        }
+        
+        .pii-details.show {
+            display: block;
+            animation: slideDown 0.3s ease;
+        }
+        
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .pii-group {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            margin-bottom: 0.75rem;
+            overflow: hidden;
+        }
+        
+        .pii-group-header {
+            display: flex;
+            align-items: center;
+            padding: 0.875rem 1rem;
+            background: #f9fafb;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+        
+        .pii-group-header:hover {
+            background: #f3f4f6;
+        }
+        
+        .pii-group-type {
+            font-weight: 600;
+            color: #dc2626;
+            flex-grow: 1;
+        }
+        
+        .pii-group-count {
+            background: #dc2626;
+            color: #fff;
+            padding: 0.25rem 0.625rem;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-right: 0.75rem;
+        }
+        
+        .pii-group-chevron {
+            color: #9ca3af;
+            transition: transform 0.2s ease;
+        }
+        
+        .pii-group-chevron.rotated {
+            transform: rotate(180deg);
+        }
+        
+        .pii-group-items {
+            display: none;
+            padding: 0.5rem;
+            background: #fff;
+        }
+        
+        .pii-group-items.show {
+            display: block;
+        }
+        
+        .pii-group-items .pii-item {
+            border-left: 3px solid #fecaca;
+        }
+
         .connection-item {
             display: flex;
             align-items: center;
@@ -783,18 +931,113 @@
                 return;
             }
             
-            let html = '';
+            // Group PII by entity type
+            const grouped = {};
             piiFindings.forEach(pii => {
+                const type = pii.entity_type || 'Unknown';
+                if (!grouped[type]) {
+                    grouped[type] = [];
+                }
+                grouped[type].push(pii);
+            });
+            
+            // Sort types by count (descending)
+            const sortedTypes = Object.keys(grouped).sort((a, b) => grouped[b].length - grouped[a].length);
+            
+            let html = `
+                <div class="pii-summary">
+                    <div class="pii-summary-header" onclick="togglePIIDetails()">
+                        <div class="pii-summary-info">
+                            <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>
+                            <strong>${piiFindings.length} PII item${piiFindings.length > 1 ? 's' : ''} detected</strong>
+                            <span class="pii-summary-types">
+                                (${sortedTypes.map(t => `${grouped[t].length} ${t}`).join(', ')})
+                            </span>
+                        </div>
+                        <button class="pii-toggle-btn" id="piiToggleBtn">
+                            <i class="bi bi-chevron-down"></i>
+                            <span>Show Details</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="pii-details" id="piiDetails">
+            `;
+            
+            sortedTypes.forEach((type, typeIndex) => {
+                const items = grouped[type];
+                const typeIcon = getPIITypeIcon(type);
+                
                 html += `
-                    <div class="pii-item">
-                        <span class="pii-type">${escapeHtml(pii.entity_type)}</span>
-                        <span class="pii-value">${escapeHtml(pii.value)}</span>
-                        <span class="pii-score">Score: ${pii.score}</span>
+                    <div class="pii-group">
+                        <div class="pii-group-header" onclick="togglePIIGroup(${typeIndex})">
+                            <span class="pii-group-type">
+                                <i class="bi ${typeIcon} me-2"></i>${escapeHtml(type)}
+                            </span>
+                            <span class="pii-group-count">${items.length}</span>
+                            <i class="bi bi-chevron-down pii-group-chevron" id="piiGroupChevron${typeIndex}"></i>
+                        </div>
+                        <div class="pii-group-items" id="piiGroup${typeIndex}">
+                `;
+                
+                items.forEach(pii => {
+                    const timestamp = pii.timestamp ? `<span class="pii-timestamp"><i class="bi bi-clock"></i> ${escapeHtml(pii.timestamp)}</span>` : '';
+                    const source = pii.source ? `<span class="pii-source">${escapeHtml(pii.source)}</span>` : '';
+                    html += `
+                        <div class="pii-item">
+                            <span class="pii-value">${escapeHtml(pii.value)}</span>
+                            ${timestamp}
+                            <span class="pii-score">Score: ${pii.score}</span>
+                            ${source}
+                        </div>
+                    `;
+                });
+                
+                html += `
+                        </div>
                     </div>
                 `;
             });
             
+            html += '</div>';
             container.innerHTML = html;
+        }
+        
+        function getPIITypeIcon(type) {
+            const icons = {
+                'PERSON': 'bi-person-fill',
+                'PATIENT_NAME': 'bi-person-fill',
+                'DATE_OF_BIRTH': 'bi-calendar-event',
+                'SSN': 'bi-file-lock-fill',
+                'US_SSN': 'bi-file-lock-fill',
+                'MEDICAL_RECORD_NUMBER': 'bi-clipboard2-pulse-fill',
+                'PHONE_NUMBER': 'bi-telephone-fill',
+                'ADDRESS': 'bi-geo-alt-fill',
+                'LOCATION': 'bi-geo-alt-fill',
+                'DRIVER_LICENSE': 'bi-card-text',
+                'US_DRIVER_LICENSE': 'bi-card-text',
+                'EMAIL_ADDRESS': 'bi-envelope-fill',
+                'CREDIT_CARD': 'bi-credit-card-fill',
+                'DATE_TIME': 'bi-calendar3'
+            };
+            return icons[type] || 'bi-shield-exclamation';
+        }
+        
+        function togglePIIDetails() {
+            const details = document.getElementById('piiDetails');
+            const btn = document.getElementById('piiToggleBtn');
+            details.classList.toggle('show');
+            if (details.classList.contains('show')) {
+                btn.innerHTML = '<i class="bi bi-chevron-up"></i><span>Hide Details</span>';
+            } else {
+                btn.innerHTML = '<i class="bi bi-chevron-down"></i><span>Show Details</span>';
+            }
+        }
+        
+        function togglePIIGroup(index) {
+            const group = document.getElementById('piiGroup' + index);
+            const chevron = document.getElementById('piiGroupChevron' + index);
+            group.classList.toggle('show');
+            chevron.classList.toggle('rotated');
         }
         
         function displayHL7Messages(messages) {
