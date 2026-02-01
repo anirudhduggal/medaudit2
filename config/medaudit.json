@@ -8,5 +8,9 @@
   "analysis": {
     "max_hl7_messages": 10,
     "max_pii_instances": 20
+  },
+  "logging": {
+    "enabled": true,
+    "log_dir": "logs"
   }
 }

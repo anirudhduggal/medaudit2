@@ -3,11 +3,10 @@ Configuration Module for Medaudit 2.0
 AI Agent Instructions:
 - This module handles loading configuration from JSON files
 - Command line arguments override config file values
-- Look for medaudit.json in current directory or user home
+- Look for medaudit.json in config/ directory or user home
 """
 
 import json
-import os
 from pathlib import Path
 
 class Config:
@@ -36,8 +35,10 @@ class Config:
 
     def _load_config_file(self):
         """Load configuration from medaudit.json if it exists."""
+        # Search order: repo config/medaudit.json -> cwd medaudit.json (backcompat) -> user home -> XDG
         config_paths = [
-            Path.cwd() / "medaudit.json",  # Current directory
+            Path.cwd() / "config" / "medaudit.json",  # Preferred repo-level config folder
+            Path.cwd() / "medaudit.json",  # Backwards-compatible fallback
             Path.home() / ".medaudit.json",  # User home directory
             Path.home() / ".config" / "medaudit.json"  # XDG config directory
         ]
@@ -73,7 +74,7 @@ class Config:
     def create_default_config(self, path=None):
         """Create a default configuration file."""
         if path is None:
-            path = Path.cwd() / "medaudit.json"
+            path = Path.cwd() / "config" / "medaudit.json"
 
         # Create directory if it doesn't exist
         path.parent.mkdir(parents=True, exist_ok=True)

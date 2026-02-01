@@ -10,7 +10,7 @@ Generalized guide for any AI agent (Copilot, Claude, Cursor, etc.) to work produ
 medaudit2/
 ├── medaudit/                          # Main Python package
 │   ├── __main__.py                    # CLI entry: python -m medaudit <cmd>
-│   ├── config.py                      # Config loader (medaudit.json precedence)
+│   ├── config.py                      # Config loader (config/medaudit.json preferred)
 │   ├── logging.py                     # Proxy activity logging (JSON Lines)
 │   │
 │   ├── analysis/                      # Traffic & PII analysis module
@@ -60,7 +60,7 @@ medaudit2/
 ├── pcap-generator.py                  # Synthetic PCAP generator (no scapy, raw struct)
 ├── pcap-samples/                      # Sample PCAP files (HL7, ADT, ORM, ORU types)
 ├── requirements.txt                   # Python dependencies
-├── medaudit.json                      # Config file (optional, version-controlled)
+├── config/medaudit.json               # Config file (preferred location)
 ├── README.md                          # Project overview & setup
 └── venv/ or .venv/                    # Python virtual environment
 ```
@@ -112,7 +112,7 @@ Accepts MLLP-wrapped HL7, generates ACK responses, logs to JSON.
 
 ### 5. **Configuration**
 ```bash
-python3 -m medaudit config --create  # Generate medaudit.json
+python3 -m medaudit config --create  # Generate config/medaudit.json (or medaudit.json backwards-compatible)
 python3 -m medaudit config --show    # Display loaded config
 ```
 
@@ -200,7 +200,7 @@ HTTP response to client
 
 ### Configuration Precedence
 1. Command-line arguments (highest priority)
-2. `medaudit.json` (current dir)
+2. `medaudit.json` (current dir — backwards-compatible)
 3. `~/.medaudit.json` (user home)
 4. `~/.config/medaudit.json` (XDG)
 5. Hardcoded defaults (lowest priority)

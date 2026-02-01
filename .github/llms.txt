@@ -47,9 +47,10 @@ Input (PCAP) → Scapy parsing → Encryption detection → HL7 extraction → P
 
 ### Configuration Precedence
 1. CLI arguments (highest)
-2. ./medaudit.json
-3. ~/.medaudit.json
-4. ~/.config/medaudit.json
+2. ./config/medaudit.json (preferred)
+3. ./medaudit.json (backwards-compatible)
+4. ~/.medaudit.json
+5. ~/.config/medaudit.json
 5. Hardcoded defaults (lowest)
 
 ## File Locations

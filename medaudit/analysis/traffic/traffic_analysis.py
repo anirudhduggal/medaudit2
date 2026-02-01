@@ -7,7 +7,6 @@ AI Agent Instructions:
 - Use this module when analyzing network traffic captures
 """
 
-import sys
 from scapy.all import rdpcap, TCP, UDP, Raw
 from scapy.layers.inet import IP
 from ..pii.pii_check import detect_pii, create_analyzer

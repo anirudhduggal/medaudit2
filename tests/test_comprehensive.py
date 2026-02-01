@@ -14,11 +14,11 @@ def test_imports():
         import medaudit
         print("✓ medaudit")
         
-        import medaudit.config
-        print("✓ medaudit.config")
+        import config
+        print("✓ config")
         
-        import medaudit.logging
-        print("✓ medaudit.logging")
+        from config.logging import ProxyLogger
+        print("✓ config.logging")
         
         import medaudit.analysis
         print("✓ medaudit.analysis")
@@ -44,7 +44,7 @@ def test_config():
     print("="*60)
     
     try:
-        from medaudit.config import config
+        from config import config
         
         # Check proxy config
         proxy_config = config.get_proxy_config()
@@ -75,7 +75,7 @@ def test_logging():
     print("="*60)
     
     try:
-        from medaudit.logging import ProxyLogger
+        from config.logging import ProxyLogger
         from pathlib import Path
         import json
         

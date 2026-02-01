@@ -11,7 +11,7 @@ import http.server
 import socketserver
 from typing import Optional
 from datetime import datetime
-from ..logging import ProxyLogger
+from config.logging import ProxyLogger
 
 
 # MLLP framing characters

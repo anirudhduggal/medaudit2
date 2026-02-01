@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Test script for logging system functionality"""
 
-from medaudit.logging import ProxyLogger
-import json
+from config.logging import ProxyLogger
 from pathlib import Path
 
 def test_logging():

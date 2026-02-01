@@ -7,7 +7,6 @@ from typing import Dict, List, Any, Optional
 from scapy.all import rdpcap, TCP, UDP, Raw
 from scapy.layers.inet import IP
 from datetime import datetime
-import re
 
 # Lazy load the PII analyzer to avoid slow startup
 _pii_analyzer = None

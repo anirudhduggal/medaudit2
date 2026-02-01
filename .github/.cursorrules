@@ -30,7 +30,7 @@ Medical device security analyzer for HL7/FHIR traffic. Detects encryption, extra
 - Entity types: PERSON, PHONE_NUMBER, EMAIL_ADDRESS, SSN, CREDIT_CARD, LOCATION
 
 ### Config Management
-- Load precedence: CLI args → medaudit.json → ~/.medaudit.json → ~/.config/medaudit.json → defaults
+- Load precedence: CLI args → config/medaudit.json (preferred) → medaudit.json (backcompat) → ~/.medaudit.json → ~/.config/medaudit.json → defaults
 - Never hardcode values; always check config first
 - Config keys: proxy (http_host, http_port, hl7_host, hl7_port), analysis (max_hl7_messages, max_pii_instances), logging (enabled, log_dir)
 

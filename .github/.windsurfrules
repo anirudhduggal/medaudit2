@@ -86,7 +86,7 @@ for entity in results:
 ### Configuration Loading
 ```python
 # Use config class, never hardcode
-from medaudit.config import config
+from config import config
 proxy_config = config.get_proxy_config()
 hl7_host = proxy_config['hl7_host']  # Respects precedence
 ```

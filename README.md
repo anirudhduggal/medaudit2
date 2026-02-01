@@ -90,7 +90,7 @@ medaudit2/
 ├── venv/                    # Virtual environment (created during setup)
 ├── .gitignore              # Git ignore rules for Python projects
 ├── requirements.txt         # Python dependencies
-├── medaudit.json           # Configuration file (optional)
+├── config/medaudit.json    # Configuration file (preferred location)
 └── README.md               # This file
 ```
 
@@ -234,7 +234,7 @@ This starts an HTTP server that:
 Medaudit 2.0 supports configuration files for default settings:
 
 ### Configuration File
-Create a `medaudit.json` file in the current directory or `~/.medaudit.json`:
+Create a `config/medaudit.json` file in the project root (preferred) or `medaudit.json` in the current directory or `~/.medaudit.json` for compatibility:
 
 ```json
 {
@@ -356,29 +356,24 @@ The project contains overlapping test files that should be consolidated:
    - Tests core Medaudit 2.0 components: config, logging, traffic analysis, PCAP parsing
    - **Functions**: `test_imports()`, `test_config()`, `test_logging()`, `test_traffic_analysis()`, `test_pcap_analysis()`, `test_proxy_server()`
 
-2. **test_comprehensive_hl7.py** (366 lines)
-   - Tests HL7 server components: imports, logger, config, server startup, client connection, message sending, logging output, MLLP protocol
-   - **Functions**: `test_imports()`, `test_message_logger()`, `test_server_config()`, `test_server_startup()`, `test_client_connection()`, `test_message_sending()`, `test_logging_output()`, `test_mllp_protocol()`
+2. **test_comprehensive_hl7.py** (311 lines)
+   - Tests HL7 server components: imports, config, server startup, client connection, message sending, logging output, MLLP protocol
+   - **Functions**: `test_imports()`, `test_server_config()`, `test_server_startup()`, `test_client_connection()`, `test_message_sending()`, `test_logging_output()`, `test_mllp_protocol()`
 
 3. **test_hl7_server_client.py** (165 lines)
    - Integration test: runs server and sends various HL7 message types
    - **Functions**: `run_server()`, `run_client_tests()` (5 message types: ADT, ORM, ORU, MDM)
 
-4. **test_client.py** (20 lines)
-   - Simple client-only test - appears to be a minimal/abandoned test
-   - **Observation**: Could be removed as redundant with test_hl7_server_client.py
-
-5. **Other Test Files**:
+4. **Other Test Files**:
    - `test_pii_check.py` - Dedicated PII detection tests (no duplication)
    - `test_logging_system.py` - Dedicated logging system tests (no duplication)
    - `test_pii_on_pcap.py` - PCAP PII extraction analysis (no duplication)
    - `analyze_pcap_pii.py` - Analysis script (not a test)
 
-**Recommendation**: Consolidate into **two main test suites**:
-- `tests/test_core_components.py` - All medaudit.analysis, medaudit.proxy, medaudit.config, medaudit.logging tests
-- `tests/test_hl7_server.py` - All medaudit.hl7server component tests (replace test_comprehensive_hl7.py)
-- Remove `test_client.py` (superseded by test_hl7_server_client.py)
-- Rename `test_hl7_server_client.py` to `test_hl7_integration.py`
+**Recommendation**: Test organization is clean:
+- `tests/test_comprehensive.py` - Core Medaudit component tests
+- `tests/test_comprehensive_hl7.py` - HL7 server component tests
+- `tests/test_hl7_server_client.py` - Integration tests
 
 #### Code Duplication Analysis ✅
 **Finding**: Minimal code duplication detected. Architecture is well-modularized.
@@ -409,9 +404,7 @@ Create shared `medaudit.logging.BaseJsonLogger` to reduce duplication between Pr
 - All functions have documented purposes
 - No unreachable code blocks
 - No commented-out test code
-
-**One Minor Case**:
-- **`test_client.py`** - Appears to be a minimal test file that duplicates functionality in `test_hl7_server_client.py`. Could be archived or removed.
+- Redundant test files have been removed
 
 #### Unused Imports ✅
 **Finding**: Clean imports throughout codebase. No unused imports detected.
@@ -423,9 +416,10 @@ Create shared `medaudit.logging.BaseJsonLogger` to reduce duplication between Pr
 
 ### Recommendations Summary
 
-**High Priority** (Code cleanup):
-1. Consolidate test files (reduce from 5 test files to 3)
-2. Remove `test_client.py` - redundant with `test_hl7_server_client.py`
+**Completed** ✅:
+1. Consolidated test files and removed redundant `test_client.py`
+2. Removed duplicate `test_message_logger` function
+3. Pinned dependency versions in requirements.txt
 
 **Medium Priority** (Architecture improvement):
 1. Create shared `BaseJsonLogger` class to reduce duplication between proxy and HL7 server logging

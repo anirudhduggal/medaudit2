@@ -6,7 +6,6 @@ FastAPI-based web interface for PCAP analysis and HL7 traffic inspection.
 import os
 import tempfile
 from pathlib import Path
-from typing import Optional
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles

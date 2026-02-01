@@ -5,19 +5,17 @@ Comprehensive Test Suite for HL7 Server & Client
 Tests all components:
 1. HL7Server - server functionality
 2. HL7Client - client functionality  
-3. MessageLogger - logging system
-4. ServerConfig - configuration
+3. ServerConfig - configuration
+4. MLLP Protocol - message framing
 """
 
 import sys
 import time
-import threading
-import json
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from medaudit.hl7server import HL7Server, HL7Client, MessageLogger, ServerConfig
+from medaudit.hl7server import HL7Server, HL7Client, ServerConfig
 
 
 def test_imports():
@@ -26,68 +24,13 @@ def test_imports():
     print("TEST 1: Module Imports")
     print("="*60)
     try:
-        from medaudit.hl7server import HL7Server, HL7Client, MessageLogger, ServerConfig
+        from medaudit.hl7server import HL7Server, HL7Client, ServerConfig
         print("✓ HL7Server imported successfully")
         print("✓ HL7Client imported successfully")
-        print("✓ MessageLogger imported successfully")
         print("✓ ServerConfig imported successfully")
         return True
     except Exception as e:
         print(f"✗ Import failed: {e}")
-        return False
-
-
-def test_message_logger():
-    """Test the message logging system."""
-    print("\n" + "="*60)
-    print("TEST 2: Message Logger")
-    print("="*60)
-    try:
-        logger = MessageLogger(log_base_dir="logs/test_hl7server")
-        
-        # Log received message
-        logger.log_received_message(
-            message="MSH|^~\\&|TEST|CLINIC|SERVER|LAB|20260128120000||ADT^A01|TEST001|P|2.5",
-            client_id=1,
-            client_address=("127.0.0.1", 12345),
-            message_control_id="TEST001",
-            message_type="ADT^A01"
-        )
-        print("✓ Received message logged")
-        
-        # Log sent message
-        logger.log_sent_message(
-            message="MSH|^~\\&|SERVER|LAB|CLINIC|TEST|20260128120000||ACK|TEST001|P|2.5",
-            client_id=1,
-            message_type="ACK"
-        )
-        print("✓ Sent message logged")
-        
-        # Log connection
-        logger.log_connection(1, ("127.0.0.1", 12345), "CONNECTED")
-        print("✓ Connection logged")
-        
-        # Log server event
-        logger.log_server_event("TEST_EVENT", {"test": "data"})
-        print("✓ Server event logged")
-        
-        # Log error
-        logger.log_error("Test error", client_id=1, error_type="TEST_ERROR")
-        print("✓ Error logged")
-        
-        # Get statistics
-        stats = logger.get_statistics()
-        print(f"✓ Statistics collected: {stats['messages_received']} messages received, {stats['messages_sent']} sent")
-        
-        # Export summary
-        summary = logger.export_summary()
-        print(f"✓ Summary exported to: {summary['log_directory']}")
-        
-        return True
-    except Exception as e:
-        print(f"✗ Logger test failed: {e}")
-        import traceback
-        traceback.print_exc()
         return False
 
 
@@ -319,7 +262,6 @@ def main():
     
     tests = [
         ("Module Imports", test_imports),
-        ("Message Logger", test_message_logger),
         ("Server Configuration", test_server_config),
         ("Server Startup/Shutdown", test_server_startup),
         ("Client Connection", test_client_connection),

@@ -64,7 +64,7 @@ results = analyzer.analyze(text=payload, language='en')
 ```
 
 ## Config System
-- Precedence: CLI args → `medaudit.json` → `~/.medaudit.json` → `~/.config/medaudit.json` → defaults
+- Precedence: CLI args → `config/medaudit.json` (preferred) → `medaudit.json` (backcompat) → `~/.medaudit.json` → `~/.config/medaudit.json` → defaults
 - Keys: `proxy` (http_host, http_port, hl7_host, hl7_port), `analysis` (max_hl7_messages, max_pii_instances), `logging` (enabled, log_dir)
 
 ## Logging

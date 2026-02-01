@@ -6,8 +6,6 @@ Can be used for testing, integration, and load testing.
 """
 
 import socket
-import ssl
-import time
 from typing import Optional, Tuple
 from datetime import datetime
 
