@@ -1,99 +1,120 @@
-# Medaudit 2.0 — GitHub Copilot Instructions
+# Medaudit 2.0 — AI Agent Instructions
 
-Guide for GitHub Copilot to assist with medical device security auditing tool development.
+Medical device security analyzer for HL7/FHIR traffic. Detects encryption status, extracts HL7 v2.x messages, identifies PII exposure using Presidio NLP + regex patterns.
 
-## Project Overview
-**Medaudit 2.0** analyzes HL7/FHIR medical device traffic for encryption & PII exposure. Core modules: PCAP analyzer, mock HL7 server, HTTP→HL7 proxy, FastAPI web UI, Presidio+regex PII detection.
+## Architecture Overview
+```
+medaudit/
+├── __main__.py                    # CLI dispatcher (analyze|web|proxy|config)
+├── analysis/
+│   ├── traffic/traffic_analysis.py   # PCAP parsing, encryption heuristics, HL7 extraction
+│   └── pii/pii_check.py              # Presidio analyzer + custom recognizers
+├── proxy/proxy_server.py             # HTTP→HL7 converter for Burp/ZAP testing
+├── hl7server/hl7_mock_server.py      # MLLP-compliant mock server with ACK responses
+└── web/app.py                        # FastAPI: POST /api/analyze, GET /
+```
 
-## Quick Commands
+## Essential Commands
 ```bash
-# Analysis
-python3 -m medaudit analyze medaudit/testFiles/hl7_v2_unencrypted_synthetic.pcap
-
-# Web UI (port 8080)
-python3 -m medaudit web --host 0.0.0.0 --port 8080
-
-# HTTP→HL7 proxy
-python3 -m medaudit proxy --port 8080 --hl7-host localhost --hl7-port 2575
-
-# Mock HL7 server
-python3 -m hl7server start --host 0.0.0.0 --port 2575
-
-# Config management
-python3 -m medaudit config --show
+python3 -m medaudit analyze <file.pcap>           # Analyze PCAP for encryption + PII
+python3 -m medaudit web --port 8080               # Start web UI
+python3 -m medaudit proxy --hl7-port 2575         # HTTP→HL7 proxy for security testing
+python3 -m medaudit.hl7server start --port 2575   # Mock HL7 server (separate module)
 ```
 
-## Key Files to Edit
-- **PCAP Analysis**: `medaudit/analysis/traffic/traffic_analysis.py`
-- **PII Detection**: `medaudit/analysis/pii/pii_check.py` (Presidio + regex)
-- **HTTP→HL7 Proxy**: `medaudit/proxy/proxy_server.py`
-- **Web API**: `medaudit/web/app.py` (FastAPI endpoints)
-- **HL7 Server**: `medaudit/hl7server/hl7_mock_server.py` (MLLP handler)
-- **CLI Router**: `medaudit/__main__.py` (subcommand entry)
+## Critical Code Patterns
 
-## Core Patterns
-
-### HL7 Detection
+### MLLP Protocol (Required for HL7 Transport)
 ```python
-# Check for MLLP-wrapped HL7 in payload
-payload = pkt[Raw].load.decode('utf-8', errors='ignore')
-if 'MSH|' in payload:
-    # Extract HL7 message
+MLLP_START, MLLP_END = b'\x0b', b'\x1c\x0d'
+mllp_wrapped = MLLP_START + hl7_msg.encode() + MLLP_END
+# Unwrap: strip \x0b prefix, split on \x1c
 ```
 
-### Encryption Heuristic
+### Binary Payload Decoding (Always Use)
 ```python
-# SSL ports: 443, 993, 995, 465, 587, 8443
-# Entropy > 0.8 = likely encrypted
-unique_bytes = len(set(payload))
-entropy = unique_bytes / len(payload)
+payload = pkt[Raw].load.decode('utf-8', errors='ignore')  # NEVER omit errors='ignore'
+if 'MSH|' in payload:  # Validate before parsing as HL7
 ```
 
-### MLLP Wrapping
-```python
-# HL7 transport: \x0b (start) + message + \x1c\r (end)
-mllp_wrapped = b'\x0b' + hl7_msg.encode() + b'\x1c\r'
-```
-
-### Presidio PII Detection
+### PII Detection (Cache Analyzer Instance)
 ```python
 from medaudit.analysis.pii.pii_check import create_analyzer
-analyzer = create_analyzer()  # Cached instance
+analyzer = create_analyzer()  # Expensive—reuse this instance
 results = analyzer.analyze(text=payload, language='en')
-# Entities: PERSON, PHONE_NUMBER, EMAIL_ADDRESS, SSN, CREDIT_CARD, LOCATION
 ```
 
-## Config System
-- Precedence: CLI args → `config/medaudit.json` (preferred) → `medaudit.json` (backcompat) → `~/.medaudit.json` → `~/.config/medaudit.json` → defaults
-- Keys: `proxy` (http_host, http_port, hl7_host, hl7_port), `analysis` (max_hl7_messages, max_pii_instances), `logging` (enabled, log_dir)
+### Encryption Detection Heuristics
+- SSL ports (443, 993, 995, 465, 587, 8443) → encrypted
+- Payload entropy > 0.8 → likely encrypted (high unique byte ratio)
 
-## Logging
-- Format: JSON Lines (.jsonl)
-- Path: `logs/YYYY-MM-DD/` (date-organized)
-- Files: `proxy_activity.jsonl`, `http_requests.jsonl`, `hl7_responses.jsonl`, `proxy_errors.jsonl`
+## Error Handling Pattern (Required)
+All modules must log errors and continue gracefully—never crash on bad input:
+```python
+import logging
+logger = logging.getLogger(__name__)
 
-## Dependencies
-- **Core**: scapy, rich
-- **PII**: presidio-analyzer, presidio-anonymizer, spacy (`en_core_web_lg`)
-- **Web**: fastapi, uvicorn, jinja2, python-multipart, aiofiles
-- **Test**: pytest
+try:
+    result = risky_operation()
+except Exception as e:
+    logger.error(f"Operation failed: {e}")
+    # Return safe default or skip, don't re-raise unless critical
+    return None  # or continue processing other items
+```
+- **PCAP parsing**: Skip malformed packets, log and continue
+- **HL7 parsing**: Return partial results if segments are malformed
+- **PII detection**: Catch Presidio/Spacy errors, return empty results
+- **Network ops**: Use timeouts, log connection failures, return graceful error responses
 
-## When Suggesting Code
-1. Use `errors='ignore'` for all UTF-8 payload decoding (binary data safety)
-2. Validate `MSH|` before parsing HL7
-3. Cache Presidio analyzer instance (avoid Spacy reloads)
-4. Keep output limits: 10 HL7 msgs, 20 PII instances
-5. Use MLLP framing for HL7 transport
-6. Maintain config cascading (no hardcoding values)
+## Configuration Precedence
+CLI args → `config/medaudit.json` → `./medaudit.json` → `~/.medaudit.json` → defaults
 
-## Testing
-- **PII**: `pytest tests/test_pii_check.py -v`
-- **PCAP**: `python3 tests/analyze_pcap_pii.py`
-- **HL7 Server**: `python3 -m pytest tests/test_hl7_server_client.py -v`
-- **All**: `pytest -q`
+## Output Limits (Enforced)
+- Max 10 HL7 messages displayed per analysis
+- Max 20 PII instances reported
+- Logs: JSON Lines in `logs/YYYY-MM-DD/*.jsonl`
 
-## Medical Device Security Focus
-- HL7 v2.x protocol analysis
-- Unencrypted PII exposure detection
-- Proxy testing with Burp Suite/ZAP
-- Mock HL7 server for safe testing
+## Testing & Verification
+
+### Run Full Integration Test (Verifies All Functionality)
+```bash
+python3 tests/test_comprehensive.py      # Tests: imports, config, logging, traffic, PCAP, proxy
+python3 tests/test_comprehensive_hl7.py  # Tests: HL7 server startup, client connection, message flow
+```
+
+### Component-Specific Tests
+```bash
+pytest tests/test_pii_check.py -v        # PII detection accuracy
+pytest tests/test_hl7_server_client.py   # HL7 server/client integration
+python3 tests/analyze_pcap_pii.py        # Manual PCAP→PII pipeline test
+```
+
+### Quick Smoke Test (All Systems)
+```bash
+pytest -q                                # Run all pytest-compatible tests
+```
+
+### End-to-End Workflow Test
+```bash
+# Terminal 1: Start HL7 server
+python3 -m medaudit.hl7server start --port 2575
+
+# Terminal 2: Start proxy
+python3 -m medaudit proxy --port 8080 --hl7-port 2575
+
+# Terminal 3: Send test message
+curl -X POST http://localhost:8080/ -d 'MSH|^~\&|TEST|LAB|EHR|HOSP|202601311200||ADT^A01|MSG001|P|2.5'
+```
+
+## Setup (Post-clone)
+```bash
+pip install -r requirements.txt
+python -m spacy download en_core_web_lg  # Required for Presidio NLP
+```
+
+## Key Constraints
+1. Never hardcode config values—use `config.get_proxy_config()` etc.
+2. Always validate `MSH|` marker before treating data as HL7
+3. MLLP framing is mandatory for HL7 device communication
+4. Presidio analyzer uses Spacy `en_core_web_lg`—slow to initialize, cache it
+5. Log all errors with context, never let exceptions crash the program
