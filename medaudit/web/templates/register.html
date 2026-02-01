@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - Medaudit 2.0</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root { --primary: #2563eb; }
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+        .register-container { width: 100%; max-width: 450px; padding: 2rem; }
+        .register-card {
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 20px;
+            padding: 2.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+        .brand { text-align: center; margin-bottom: 2rem; }
+        .brand-icon {
+            font-size: 3rem;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .brand h1 { font-size: 1.75rem; font-weight: 700; color: #1e293b; margin-top: 0.5rem; }
+        .form-floating { margin-bottom: 1rem; }
+        .form-floating input {
+            border-radius: 12px;
+            border: 2px solid #e2e8f0;
+            padding: 1rem;
+            height: auto;
+        }
+        .form-floating input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            border: none;
+            border-radius: 12px;
+            padding: 0.875rem;
+            font-weight: 600;
+            width: 100%;
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3); }
+        .login-link { text-align: center; margin-top: 1.5rem; color: #64748b; }
+        .login-link a { color: var(--primary); text-decoration: none; font-weight: 600; }
+        .alert { border-radius: 12px; border: none; }
+    </style>
+</head>
+<body>
+    <div class="register-container">
+        <div class="register-card">
+            <div class="brand">
+                <div class="brand-icon"><i class="bi bi-shield-check"></i></div>
+                <h1>Create Account</h1>
+            </div>
+            
+            <div id="errorAlert" class="alert alert-danger d-none" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i><span id="errorMessage"></span>
+            </div>
+            
+            <form id="registerForm">
+                <div class="form-floating">
+                    <input type="text" class="form-control" id="username" name="username" placeholder="Username" required minlength="3">
+                    <label for="username"><i class="bi bi-person me-2"></i>Username</label>
+                </div>
+                <div class="form-floating">
+                    <input type="email" class="form-control" id="email" name="email" placeholder="Email" required>
+                    <label for="email"><i class="bi bi-envelope me-2"></i>Email</label>
+                </div>
+                <div class="form-floating">
+                    <input type="text" class="form-control" id="fullName" name="full_name" placeholder="Full Name">
+                    <label for="fullName"><i class="bi bi-person-badge me-2"></i>Full Name (optional)</label>
+                </div>
+                <div class="form-floating">
+                    <input type="password" class="form-control" id="password" name="password" placeholder="Password" required minlength="6">
+                    <label for="password"><i class="bi bi-lock me-2"></i>Password (min 6 chars)</label>
+                </div>
+                <button type="submit" class="btn btn-primary mt-3" id="submitBtn">
+                    <span class="btn-text">Create Account</span>
+                    <span class="spinner-border spinner-border-sm d-none" role="status"></span>
+                </button>
+            </form>
+            
+            <div class="login-link">Already have an account? <a href="/login">Sign in</a></div>
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const submitBtn = document.getElementById('submitBtn');
+            const btnText = submitBtn.querySelector('.btn-text');
+            const spinner = submitBtn.querySelector('.spinner-border');
+            const errorAlert = document.getElementById('errorAlert');
+            const errorMessage = document.getElementById('errorMessage');
+            
+            btnText.textContent = 'Creating account...';
+            spinner.classList.remove('d-none');
+            submitBtn.disabled = true;
+            errorAlert.classList.add('d-none');
+            
+            try {
+                const response = await fetch('/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: document.getElementById('username').value,
+                        email: document.getElementById('email').value,
+                        password: document.getElementById('password').value,
+                        full_name: document.getElementById('fullName').value || null
+                    })
+                });
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    window.location.href = '/dashboard';
+                } else {
+                    throw new Error(data.detail || 'Registration failed');
+                }
+            } catch (error) {
+                errorMessage.textContent = error.message;
+                errorAlert.classList.remove('d-none');
+            } finally {
+                btnText.textContent = 'Create Account';
+                spinner.classList.add('d-none');
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

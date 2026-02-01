@@ -539,7 +539,16 @@ def analyze_pcap_detailed(pcap_file: str) -> Dict[str, Any]:
             "encrypted_count": encrypted_packets,
             "unencrypted_count": unencrypted_packets,
             "risk_level": "high" if encryption_status == "unencrypted" else 
-                         ("medium" if encryption_status == "partially_encrypted" else "low")
+                         ("medium" if encryption_status == "partially_encrypted" else "low"),
+            "reason": (
+                f"All {total_analyzed} analyzed packets are unencrypted - PHI exposure risk!" 
+                if encryption_status == "unencrypted" else
+                f"{encrypted_packets}/{total_analyzed} packets encrypted ({encryption_percentage}%)"
+                if encryption_status == "partially_encrypted" else
+                f"All {total_analyzed} analyzed packets appear encrypted"
+                if encryption_status == "fully_encrypted" else
+                "No analyzable traffic found"
+            )
         },
         "hl7_messages": hl7_messages,
         "pii_findings": all_pii,
