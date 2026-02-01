@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Medaudit 2.0</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root { --primary: #2563eb; --bg-dark: #0f172a; --bg-card: #1e293b; }
+        body { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); min-height: 100vh; font-family: 'Segoe UI', system-ui, sans-serif; }
+        .navbar { background: rgba(15, 23, 42, 0.95) !important; backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .navbar-brand { font-weight: 700; font-size: 1.5rem; }
+        .brand-icon { background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .main-container { padding: 2rem 0; }
+        .page-header { margin-bottom: 2rem; }
+        .page-header h1 { color: #fff; font-weight: 700; }
+        .page-header p { color: rgba(255,255,255,0.6); }
+        .project-card { background: rgba(255,255,255,0.95); border: none; border-radius: 16px; transition: all 0.3s; cursor: pointer; height: 100%; }
+        .project-card:hover { transform: translateY(-5px); box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
+        .project-card .card-body { padding: 1.5rem; }
+        .project-title { font-weight: 600; font-size: 1.1rem; color: #1e293b; margin-bottom: 0.5rem; }
+        .project-desc { color: #64748b; font-size: 0.875rem; margin-bottom: 1rem; }
+        .project-meta { display: flex; gap: 1rem; font-size: 0.8rem; color: #94a3b8; }
+        .project-meta i { margin-right: 0.25rem; }
+        .status-badge { font-size: 0.7rem; padding: 0.25rem 0.75rem; border-radius: 50px; }
+        .status-active { background: #dcfce7; color: #16a34a; }
+        .status-completed { background: #dbeafe; color: #2563eb; }
+        .new-project-card { background: rgba(255,255,255,0.05); border: 2px dashed rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; min-height: 200px; }
+        .new-project-card:hover { border-color: var(--primary); background: rgba(37, 99, 235, 0.1); }
+        .new-project-card i { font-size: 3rem; color: rgba(255,255,255,0.3); }
+        .new-project-card span { color: rgba(255,255,255,0.5); margin-top: 0.5rem; }
+        .modal-content { border-radius: 16px; }
+        .modal-header { border-bottom: 1px solid #e2e8f0; }
+        .modal-footer { border-top: 1px solid #e2e8f0; }
+        .btn-create { background: linear-gradient(135deg, #3b82f6, #2563eb); border: none; }
+        .user-menu { color: rgba(255,255,255,0.7); }
+        .user-menu:hover { color: #fff; }
+        .dropdown-menu { border-radius: 12px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="/dashboard">
+                <span class="brand-icon"><i class="bi bi-shield-check"></i></span> Medaudit 2.0
+            </a>
+            <div class="dropdown">
+                <button class="btn user-menu dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-person-circle me-1"></i> <span id="userName">User</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="#" onclick="logout()"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container main-container">
+        <div class="page-header d-flex justify-content-between align-items-center">
+            <div>
+                <h1>Projects</h1>
+                <p>Manage your security audit projects</p>
+            </div>
+        </div>
+
+        <div class="row g-4" id="projectsGrid">
+            <!-- Projects loaded here -->
+        </div>
+    </div>
+
+    <!-- New Project Modal -->
+    <div class="modal fade" id="newProjectModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-folder-plus me-2"></i>New Project</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="newProjectForm">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Project Name *</label>
+                            <input type="text" class="form-control" id="projectName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control" id="projectDesc" rows="3"></textarea>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Engagement Start</label>
+                                <input type="date" class="form-control" id="engagementStart">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Engagement End</label>
+                                <input type="date" class="form-control" id="engagementEnd">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-create text-white">Create Project</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentUser = null;
+
+        async function checkAuth() {
+            try {
+                const response = await fetch('/auth/check');
+                const data = await response.json();
+                if (!data.authenticated) {
+                    window.location.href = '/login';
+                    return;
+                }
+                currentUser = data.user;
+                document.getElementById('userName').textContent = currentUser.full_name || currentUser.username;
+                loadProjects();
+            } catch (error) {
+                window.location.href = '/login';
+            }
+        }
+
+        async function loadProjects() {
+            try {
+                const response = await fetch('/api/projects');
+                const data = await response.json();
+                renderProjects(data.projects);
+            } catch (error) {
+                console.error('Failed to load projects:', error);
+            }
+        }
+
+        function renderProjects(projects) {
+            const grid = document.getElementById('projectsGrid');
+            let html = '';
+
+            for (const project of projects) {
+                const statusClass = project.status === 'active' ? 'status-active' : 'status-completed';
+                const desc = project.description || 'No description';
+                const created = new Date(project.created_at).toLocaleDateString();
+
+                html += `
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card project-card" onclick="openProject('${project.id}')">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h5 class="project-title">${escapeHtml(project.name)}</h5>
+                                    <span class="status-badge ${statusClass}">${project.status}</span>
+                                </div>
+                                <p class="project-desc">${escapeHtml(desc.substring(0, 100))}${desc.length > 100 ? '...' : ''}</p>
+                                <div class="project-meta">
+                                    <span><i class="bi bi-calendar3"></i>${created}</span>
+                                    <span><i class="bi bi-file-earmark"></i>${project.pcap_count || 0} PCAPs</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Add new project card
+            html += `
+                <div class="col-md-6 col-lg-4">
+                    <div class="card project-card new-project-card" data-bs-toggle="modal" data-bs-target="#newProjectModal">
+                        <div class="text-center">
+                            <i class="bi bi-plus-lg"></i>
+                            <span class="d-block">New Project</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            grid.innerHTML = html;
+        }
+
+        function openProject(projectId) {
+            window.location.href = `/project/${projectId}`;
+        }
+
+        document.getElementById('newProjectForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                const response = await fetch('/api/projects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: document.getElementById('projectName').value,
+                        description: document.getElementById('projectDesc').value || null,
+                        engagement_start: document.getElementById('engagementStart').value || null,
+                        engagement_end: document.getElementById('engagementEnd').value || null
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('newProjectModal')).hide();
+                    openProject(data.project.id);
+                }
+            } catch (error) {
+                alert('Failed to create project: ' + error.message);
+            }
+        });
+
+        async function logout() {
+            await fetch('/auth/logout', { method: 'POST' });
+            window.location.href = '/login';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        checkAuth();
+    </script>
+</body>
+</html>
