@@ -159,3 +159,4 @@ logs/
 logs/hl7server/
 logs/2026-*
 logs/test_hl7server/
+medaudit/data/medaudit.db
