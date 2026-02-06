@@ -20,6 +20,7 @@ from .client_api import router as client_router
 from .fuzzer_api import router as fuzzer_router
 from .traffic_api import router as traffic_router
 from .server_api import router as server_router
+from .ai_api import router as ai_router
 from .database import get_db_manager, get_db
 
 # Get the directory where this file is located
@@ -108,6 +109,7 @@ app.include_router(client_router)
 app.include_router(fuzzer_router)
 app.include_router(traffic_router)
 app.include_router(server_router)
+app.include_router(ai_router)
 
 
 @app.on_event("startup")
@@ -217,12 +219,12 @@ def start_web_server(
 ║  Web UI:     http://{host}:{port:<5}                          ║
 ║  API Docs:   http://{host}:{port:<5}/docs                     ║
 ║                                                           ║
-║  Admin Login:                                             ║
+║  Default Admin Credentials:                               ║
 ║    Username: admin                                        ║
 ║    Password: {masked_password:<44}║
 ║                                                           ║
-║  NOTE: Full password shown only once above.               ║
-║  Use --password or --generate-password to set new one.    ║
+║  NOTE: Change default password for production use!        ║
+║  Use --password or --generate-password flags on startup.  ║
 ╚═══════════════════════════════════════════════════════════╝
 """)
     

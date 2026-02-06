@@ -120,6 +120,11 @@
                 <i class="bi bi-hdd-rack tab-icon"></i>Server
             </button>
         </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#aiTab">
+                <i class="bi bi-chat-dots tab-icon"></i>Analyze with AI
+            </button>
+        </li>
     </ul>
 
     <div class="container-fluid">
@@ -132,40 +137,12 @@
                             <div class="card-header">Target Configuration</div>
                             <div class="card-body config-form">
                                 <div class="mb-3">
-                                    <label>Send Mode</label>
-                                    <select class="form-select" id="sendMode" onchange="updateSendModeUI()">
-                                        <option value="to_server">Send to Server (as Client)</option>
-                                        <option value="to_client">Send to Clients (as Server)</option>
-                                    </select>
-                                    <small class="text-muted" id="sendModeHelp">Connect to a target server and send payloads</small>
+                                    <label>Target Host</label>
+                                    <input type="text" class="form-control" id="clientHost" value="localhost">
                                 </div>
-                                <div id="clientModeConfig">
-                                    <div class="mb-3">
-                                        <label>Target Host</label>
-                                        <input type="text" class="form-control" id="clientHost" value="localhost">
-                                    </div>
-                                    <div class="mb-3">
-                                        <label>Target Port</label>
-                                        <input type="number" class="form-control" id="clientPort" value="2575">
-                                    </div>
-                                </div>
-                                <div id="serverModeConfig" style="display: none;">
-                                    <div class="mb-3">
-                                        <label>Listen Port</label>
-                                        <input type="number" class="form-control" id="maliciousServerPort" value="2575">
-                                    </div>
-                                    <div class="d-flex align-items-center gap-2 mb-2">
-                                        <button class="btn btn-sm btn-success flex-grow-1" id="maliciousServerBtn" onclick="toggleMaliciousServer()">
-                                            <i class="bi bi-play-fill me-1"></i>Start Server
-                                        </button>
-                                    </div>
-                                    <div id="maliciousServerStatus" class="small text-muted" style="display: none;">
-                                        <div class="d-flex align-items-center gap-2">
-                                            <div class="status-dot status-running"></div>
-                                            <span>Waiting for clients on port <strong id="maliciousServerPortDisplay">2575</strong></span>
-                                        </div>
-                                        <div class="mt-1">Clients connected: <strong id="maliciousClientCount">0</strong></div>
-                                    </div>
+                                <div class="mb-3">
+                                    <label>Target Port</label>
+                                    <input type="number" class="form-control" id="clientPort" value="2575">
                                 </div>
                                 <div class="form-check mb-3">
                                     <input type="checkbox" class="form-check-input" id="clientTLS">
@@ -462,6 +439,109 @@
                     </div>
                 </div>
             </div>
+
+            <!-- AI ANALYSIS TAB -->
+            <div class="tab-pane fade" id="aiTab">
+                <div class="row">
+                    <div class="col-lg-4">
+                        <div class="card">
+                            <div class="card-header">AI Configuration</div>
+                            <div class="card-body">
+                                <div id="aiConfigStatus" class="alert alert-warning mb-3">
+                                    <i class="bi bi-exclamation-triangle"></i> AI not configured
+                                </div>
+                                <div class="mb-3">
+                                    <label>Provider</label>
+                                    <select class="form-control" id="aiProvider" onchange="updateProviderFields()">
+                                        <option value="">Select Provider...</option>
+                                        <option value="openai">OpenAI</option>
+                                        <option value="anthropic">Anthropic Claude</option>
+                                        <option value="custom">Custom (OpenAI-compatible)</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label>API Key <i class="bi bi-info-circle" title="Your API key is stored in memory only and never saved to database"></i></label>
+                                    <input type="password" class="form-control" id="aiApiKey" placeholder="sk-...">
+                                    <small class="text-muted">Stored in memory only, not persisted</small>
+                                </div>
+                                <div class="mb-3">
+                                    <label>Model</label>
+                                    <input type="text" class="form-control" id="aiModel" placeholder="e.g., gpt-4, claude-3-5-sonnet-20241022">
+                                </div>
+                                <div class="mb-3" id="aiBaseUrlField" style="display: none;">
+                                    <label>Base URL</label>
+                                    <input type="text" class="form-control" id="aiBaseUrl" placeholder="http://localhost:11434/v1">
+                                    <small class="text-muted">For Ollama, LM Studio, etc.</small>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6 mb-3">
+                                        <label>Temperature</label>
+                                        <input type="number" class="form-control" id="aiTemperature" value="0.7" min="0" max="2" step="0.1">
+                                    </div>
+                                    <div class="col-6 mb-3">
+                                        <label>Max Tokens</label>
+                                        <input type="number" class="form-control" id="aiMaxTokens" value="2000">
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary btn-action w-100 mb-2" onclick="saveAIConfig()">
+                                    <i class="bi bi-check-circle me-1"></i>Save Configuration
+                                </button>
+                                <button class="btn btn-outline-secondary btn-action w-100" onclick="showMCPConfig()">
+                                    <i class="bi bi-gear me-1"></i>MCP Config (Advanced)
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">Quick Prompts</div>
+                            <div class="card-body" id="aiSuggestions">
+                                <div class="text-center text-muted py-3">
+                                    <small>Configure AI to see suggestions</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-8">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span>AI Analysis Chat</span>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="clearChatHistory()">
+                                    <i class="bi bi-trash"></i> Clear
+                                </button>
+                            </div>
+                            <div class="card-body p-0">
+                                <div id="aiChatArea" style="height: 500px; overflow-y: auto; padding: 1rem; background: #f8fafc;">
+                                    <div class="text-center text-muted py-5">
+                                        <i class="bi bi-chat-dots" style="font-size: 3rem; opacity: 0.3;"></i>
+                                        <p class="mt-3">Start a conversation to analyze your security findings</p>
+                                        <p class="small">Ask about vulnerabilities, PII exposure, attack vectors, or pentesting strategies</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-footer" style="background: #fff;">
+                                <div class="input-group">
+                                    <textarea class="form-control" id="aiMessageInput" rows="2" placeholder="Ask about security findings, vulnerabilities, or pentesting strategies..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIMessage();}"></textarea>
+                                    <button class="btn btn-primary" onclick="sendAIMessage()" id="aiSendBtn">
+                                        <i class="bi bi-send"></i>
+                                    </button>
+                                </div>
+                                <div class="mt-2">
+                                    <button class="btn btn-sm btn-outline-primary me-1" onclick="analyzeProjectWithAI('comprehensive')">
+                                        <i class="bi bi-clipboard-check"></i> Comprehensive Analysis
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-warning me-1" onclick="analyzeProjectWithAI('vulnerabilities')">
+                                        <i class="bi bi-shield-exclamation"></i> Find Vulnerabilities
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="analyzeProjectWithAI('attack_vectors')">
+                                        <i class="bi bi-lightning"></i> Attack Vectors
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -542,181 +622,34 @@
             }
         }
 
-        // Send mode handling
-        function updateSendModeUI() {
-            const mode = document.getElementById('sendMode').value;
-            const clientConfig = document.getElementById('clientModeConfig');
-            const serverConfig = document.getElementById('serverModeConfig');
-            const helpText = document.getElementById('sendModeHelp');
-            const sendBtn = document.querySelector('button[onclick="sendMessage()"]');
-            
-            if (mode === 'to_server') {
-                clientConfig.style.display = 'block';
-                serverConfig.style.display = 'none';
-                helpText.textContent = 'Connect to a target server and send payloads';
-                if (sendBtn) {
-                    sendBtn.innerHTML = '<i class="bi bi-send me-1"></i>Send Message';
-                }
-            } else {
-                clientConfig.style.display = 'none';
-                serverConfig.style.display = 'block';
-                helpText.textContent = 'Start a malicious server and send payloads to connecting clients';
-                if (sendBtn) {
-                    sendBtn.innerHTML = '<i class="bi bi-send me-1"></i>Queue Response';
-                }
-            }
-        }
-
-        // Malicious server state
-        let maliciousServerId = null;
-        let maliciousServerPollInterval = null;
-        let queuedMaliciousResponse = null;
-
-        async function toggleMaliciousServer() {
-            if (maliciousServerId) {
-                await stopMaliciousServer();
-            } else {
-                await startMaliciousServer();
-            }
-        }
-
-        async function startMaliciousServer() {
-            const btn = document.getElementById('maliciousServerBtn');
-            const port = document.getElementById('maliciousServerPort').value;
-            
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-            
-            try {
-                // Create a malicious server via the API
-                const response = await fetch(`/api/client/malicious-server/start`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        port: parseInt(port),
-                        use_tls: document.getElementById('clientTLS').checked
-                    })
-                });
-                const data = await response.json();
-                
-                if (data.success) {
-                    maliciousServerId = data.server_id;
-                    document.getElementById('maliciousServerPortDisplay').textContent = port;
-                    document.getElementById('maliciousServerStatus').style.display = 'block';
-                    btn.className = 'btn btn-sm btn-danger flex-grow-1';
-                    btn.innerHTML = '<i class="bi bi-stop-fill me-1"></i>Stop Server';
-                    
-                    // Start polling for client connections
-                    maliciousServerPollInterval = setInterval(pollMaliciousServer, 2000);
-                } else {
-                    alert('Failed to start server: ' + (data.detail || data.error || 'Unknown error'));
-                }
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
-            
-            btn.disabled = false;
-        }
-
-        async function stopMaliciousServer() {
-            const btn = document.getElementById('maliciousServerBtn');
-            
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-            
-            try {
-                await fetch(`/api/client/malicious-server/stop`, { method: 'POST' });
-            } catch (e) { console.error(e); }
-            
-            maliciousServerId = null;
-            queuedMaliciousResponse = null;
-            if (maliciousServerPollInterval) clearInterval(maliciousServerPollInterval);
-            
-            document.getElementById('maliciousServerStatus').style.display = 'none';
-            btn.className = 'btn btn-sm btn-success flex-grow-1';
-            btn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Start Server';
-            btn.disabled = false;
-        }
-
-        async function pollMaliciousServer() {
-            if (!maliciousServerId) return;
-            
-            try {
-                const response = await fetch(`/api/client/malicious-server/status`);
-                const data = await response.json();
-                
-                document.getElementById('maliciousClientCount').textContent = data.client_count || 0;
-                
-                // Log new events
-                if (data.events) {
-                    const log = document.getElementById('clientLog');
-                    for (const event of data.events) {
-                        if (event.type === 'client_connected') {
-                            addLogEntry(log, 'received', `Client connected: ${event.client}`);
-                        } else if (event.type === 'message_received') {
-                            addLogEntry(log, 'received', `Received from ${event.client}: ${(event.message || '').substring(0, 50)}...`);
-                        } else if (event.type === 'response_sent') {
-                            addLogEntry(log, 'sent', `Sent malicious response to ${event.client}`);
-                        }
-                    }
-                }
-            } catch (e) { console.error(e); }
-        }
-
         async function sendMessage() {
             const message = document.getElementById('messageEditor').value;
             if (!message.trim()) return alert('Please enter a message');
 
-            const mode = document.getElementById('sendMode').value;
             const log = document.getElementById('clientLog');
+            
+            // Send to target server
+            addLogEntry(log, 'sent', message.substring(0, 100) + '...');
 
-            if (mode === 'to_server') {
-                // Client mode: send to target server
-                addLogEntry(log, 'sent', message.substring(0, 100) + '...');
-
-                try {
-                    const response = await fetch('/api/client/send', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            target_host: document.getElementById('clientHost').value,
-                            target_port: parseInt(document.getElementById('clientPort').value),
-                            use_tls: document.getElementById('clientTLS').checked,
-                            message: message
-                        })
-                    });
-                    const data = await response.json();
-                    if (data.success) {
-                        addLogEntry(log, 'received', data.response || 'No response', data.response_time_ms + 'ms');
-                    } else {
-                        addLogEntry(log, 'error', data.error || 'Failed to send message');
-                    }
-                } catch (error) {
-                    addLogEntry(log, 'error', error.message);
+            try {
+                const response = await fetch('/api/client/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        target_host: document.getElementById('clientHost').value,
+                        target_port: parseInt(document.getElementById('clientPort').value),
+                        use_tls: document.getElementById('clientTLS').checked,
+                        message: message
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    addLogEntry(log, 'received', data.response || 'No response', data.response_time_ms + 'ms');
+                } else {
+                    addLogEntry(log, 'error', data.error || 'Failed to send message');
                 }
-            } else {
-                // Server mode: queue response for next client
-                if (!maliciousServerId) {
-                    alert('Please start the malicious server first');
-                    return;
-                }
-                
-                try {
-                    const response = await fetch('/api/client/malicious-server/queue-response', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: message })
-                    });
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        addLogEntry(log, 'info', 'Response queued - will be sent to next connecting client');
-                    } else {
-                        addLogEntry(log, 'error', data.error || 'Failed to queue response');
-                    }
-                } catch (error) {
-                    addLogEntry(log, 'error', error.message);
-                }
+            } catch (error) {
+                addLogEntry(log, 'error', error.message);
             }
         }
 
@@ -1509,8 +1442,338 @@
             return div.innerHTML;
         }
 
+        // ========== AI ANALYSIS FUNCTIONS ==========
+        let chatHistory = [];
+        let aiConfigured = false;
+
+        async function checkAIConfig() {
+            try {
+                const response = await fetch('/api/ai/config');
+                const data = await response.json();
+                
+                aiConfigured = data.configured;
+                const statusDiv = document.getElementById('aiConfigStatus');
+                
+                if (data.configured) {
+                    statusDiv.className = 'alert alert-success mb-3';
+                    statusDiv.innerHTML = `<i class="bi bi-check-circle"></i> AI configured (${data.provider})`;
+                    loadAISuggestions();
+                } else {
+                    statusDiv.className = 'alert alert-warning mb-3';
+                    statusDiv.innerHTML = '<i class="bi bi-exclamation-triangle"></i> AI not configured';
+                }
+            } catch (error) {
+                console.error('Failed to check AI config:', error);
+            }
+        }
+
+        async function saveAIConfig() {
+            const config = {
+                provider: document.getElementById('aiProvider').value,
+                api_key: document.getElementById('aiApiKey').value,
+                model: document.getElementById('aiModel').value || null,
+                base_url: document.getElementById('aiBaseUrl').value || null,
+                temperature: parseFloat(document.getElementById('aiTemperature').value),
+                max_tokens: parseInt(document.getElementById('aiMaxTokens').value),
+                mcp_config: null  // TODO: Add MCP config UI
+            };
+
+            if (!config.provider) {
+                alert('Please select a provider');
+                return;
+            }
+
+            if (!config.api_key) {
+                alert('Please enter your API key');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/ai/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+
+                if (response.ok) {
+                    aiConfigured = true;
+                    alert('AI configuration saved successfully!');
+                    checkAIConfig();
+                } else {
+                    const error = await response.json();
+                    alert('Failed to save configuration: ' + (error.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Failed to save configuration: ' + error.message);
+            }
+        }
+
+        function updateProviderFields() {
+            const provider = document.getElementById('aiProvider').value;
+            const baseUrlField = document.getElementById('aiBaseUrlField');
+            
+            if (provider === 'custom') {
+                baseUrlField.style.display = 'block';
+            } else {
+                baseUrlField.style.display = 'none';
+            }
+
+            // Set default models
+            const modelInput = document.getElementById('aiModel');
+            if (provider === 'openai') {
+                modelInput.placeholder = 'gpt-4';
+            } else if (provider === 'anthropic') {
+                modelInput.placeholder = 'claude-3-5-sonnet-20241022';
+            } else {
+                modelInput.placeholder = 'Model name';
+            }
+        }
+
+        async function loadAISuggestions() {
+            try {
+                const response = await fetch('/api/ai/suggestions');
+                const data = await response.json();
+                
+                const container = document.getElementById('aiSuggestions');
+                let html = '';
+                
+                for (const category of data.categories) {
+                    html += `<div class="mb-3">
+                        <div class="fw-bold small text-muted mb-2">${escapeHtml(category.name)}</div>`;
+                    
+                    for (const prompt of category.prompts.slice(0, 2)) {  // Show first 2
+                        html += `<div class="payload-card" style="padding: 0.5rem; margin-bottom: 0.4rem; font-size: 0.85rem;" onclick="useSuggestedPrompt('${escapeHtml(prompt).replace(/'/g, "\\'")}')">
+                            ${escapeHtml(prompt)}
+                        </div>`;
+                    }
+                    
+                    html += '</div>';
+                }
+                
+                container.innerHTML = html;
+            } catch (error) {
+                console.error('Failed to load suggestions:', error);
+            }
+        }
+
+        function useSuggestedPrompt(prompt) {
+            document.getElementById('aiMessageInput').value = prompt;
+            document.getElementById('aiMessageInput').focus();
+        }
+
+        async function sendAIMessage() {
+            if (!aiConfigured) {
+                alert('Please configure AI first');
+                return;
+            }
+
+            const input = document.getElementById('aiMessageInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+
+            // Add user message to chat
+            addChatMessage('user', message);
+            input.value = '';
+
+            // Disable send button
+            const sendBtn = document.getElementById('aiSendBtn');
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+            try {
+                const response = await fetch('/api/ai/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: message,
+                        history: chatHistory,
+                        context: await gatherProjectContext()
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    addChatMessage('assistant', data.response);
+                } else {
+                    const error = await response.json();
+                    addChatMessage('error', 'Error: ' + (error.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                addChatMessage('error', 'Error: ' + error.message);
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = '<i class="bi bi-send"></i>';
+            }
+        }
+
+        async function analyzeProjectWithAI(analysisType) {
+            if (!aiConfigured) {
+                alert('Please configure AI first');
+                return;
+            }
+
+            addChatMessage('system', `Starting ${analysisType.replace('_', ' ')} analysis...`);
+
+            const sendBtn = document.getElementById('aiSendBtn');
+            sendBtn.disabled = true;
+
+            try {
+                const response = await fetch(`/api/ai/projects/${projectId}/analyze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: analysisType })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    addChatMessage('assistant', data.analysis);
+                } else {
+                    const error = await response.json();
+                    addChatMessage('error', 'Error: ' + (error.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                addChatMessage('error', 'Error: ' + error.message);
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
+
+        function addChatMessage(role, content) {
+            const chatArea = document.getElementById('aiChatArea');
+            
+            // Remove empty state if present
+            if (chatArea.querySelector('.text-center')) {
+                chatArea.innerHTML = '';
+            }
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'mb-3';
+            
+            let bgColor, icon, label;
+            if (role === 'user') {
+                bgColor = '#e0f2fe';
+                icon = 'bi-person';
+                label = 'You';
+                chatHistory.push({ role: 'user', content: content });
+            } else if (role === 'assistant') {
+                bgColor = '#f0fdf4';
+                icon = 'bi-robot';
+                label = 'AI Assistant';
+                chatHistory.push({ role: 'assistant', content: content });
+            } else if (role === 'system') {
+                bgColor = '#fef3c7';
+                icon = 'bi-info-circle';
+                label = 'System';
+            } else {
+                bgColor = '#fee2e2';
+                icon = 'bi-exclamation-triangle';
+                label = 'Error';
+            }
+
+            messageDiv.innerHTML = `
+                <div style="background: ${bgColor}; padding: 1rem; border-radius: 8px;">
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="bi ${icon} me-2"></i>
+                        <strong class="small">${label}</strong>
+                    </div>
+                    <div style="white-space: pre-wrap; font-size: 0.9rem;">${escapeHtml(content)}</div>
+                </div>
+            `;
+
+            chatArea.appendChild(messageDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function clearChatHistory() {
+            if (confirm('Clear chat history?')) {
+                chatHistory = [];
+                document.getElementById('aiChatArea').innerHTML = `
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-chat-dots" style="font-size: 3rem; opacity: 0.3;"></i>
+                        <p class="mt-3">Start a conversation to analyze your security findings</p>
+                        <p class="small">Ask about vulnerabilities, PII exposure, attack vectors, or pentesting strategies</p>
+                    </div>
+                `;
+            }
+        }
+
+        async function gatherProjectContext() {
+            // Gather comprehensive project data to provide full context to AI
+            const context = {
+                project_name: project?.name,
+                project_description: project?.description,
+                project_status: project?.status
+            };
+
+            // Add traffic analysis summary with detailed findings
+            try {
+                const trafficResp = await fetch(`/api/traffic/projects/${projectId}/summary`);
+                if (trafficResp.ok) {
+                    context.traffic_summary = await trafficResp.json();
+                }
+            } catch (e) {
+                console.log('Could not fetch traffic summary:', e);
+            }
+
+            // Add recent PCAP analyses with full results
+            try {
+                const analysesResp = await fetch(`/api/traffic/projects/${projectId}/analyses`);
+                if (analysesResp.ok) {
+                    const analysesData = await analysesResp.json();
+                    context.recent_analyses = analysesData.analyses?.slice(0, 5) || [];
+                }
+            } catch (e) {
+                console.log('Could not fetch analyses:', e);
+            }
+
+            // Add fuzzing jobs with results
+            try {
+                const fuzzerResp = await fetch(`/api/fuzzer/projects/${projectId}/jobs`);
+                if (fuzzerResp.ok) {
+                    const fuzzerData = await fuzzerResp.json();
+                    context.fuzzing_jobs = fuzzerData.jobs?.slice(0, 5) || [];
+                }
+            } catch (e) {
+                console.log('Could not fetch fuzzing jobs:', e);
+            }
+
+            // Add server instances with status
+            try {
+                const serversResp = await fetch(`/api/server/projects/${projectId}/servers`);
+                if (serversResp.ok) {
+                    const serversData = await serversResp.json();
+                    context.servers = serversData.servers || [];
+                }
+            } catch (e) {
+                console.log('Could not fetch servers:', e);
+            }
+
+            // Add client sessions
+            try {
+                const sessionsResp = await fetch(`/api/client/projects/${projectId}/sessions`);
+                if (sessionsResp.ok) {
+                    const sessionsData = await sessionsResp.json();
+                    context.client_sessions = sessionsData.sessions || [];
+                }
+            } catch (e) {
+                console.log('Could not fetch client sessions:', e);
+            }
+
+            return context;
+        }
+
+        function showMCPConfig() {
+            alert('MCP (Model Context Protocol) configuration UI coming soon!\n\nFor now, you can use standard API configurations with OpenAI-compatible endpoints.');
+        }
+
         // Initialize
         loadProject();
+        
+        // Check AI config when tab is shown
+        document.querySelector('button[data-bs-target="#aiTab"]').addEventListener('click', () => {
+            checkAIConfig();
+        });
     </script>
 </body>
 </html>

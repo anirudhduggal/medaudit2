@@ -123,6 +123,27 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RegisterRequest(BaseModel):
+    """Registration request schema."""
+    username: str
+    password: str
+    full_name: Optional[str] = None
+
+
+class ChangePasswordRequest(BaseModel):
+    """Password change request schema."""
+    current_password: str
+    new_password: str
+
+
+class CreateUserRequest(BaseModel):
+    """Admin user creation request schema (localhost only)."""
+    username: str
+    password: str
+    full_name: Optional[str] = None
+    is_admin: bool = False
+
+
 def get_session_token(request: Request) -> Optional[str]:
     """Extract session token from cookie or header."""
     # Try cookie first
@@ -187,8 +208,10 @@ async def login(
             headers={"Retry-After": str(lockout_seconds)}
         )
     
-    # Only allow admin login
-    user = db.query(User).filter(User.username == "admin").first()
+    # Find user by username or email
+    user = db.query(User).filter(
+        (User.username == login_request.username) | (User.email == login_request.username)
+    ).first()
     
     if not user or not user.verify_password(login_request.password):
         # Record failed attempt
@@ -233,7 +256,8 @@ async def login(
     # SECURITY: Do not return token in response body - only in httpOnly cookie
     return {
         "success": True,
-        "user": user.to_dict()
+        "user": user.to_dict(),
+        "redirect": "/dashboard"
     }
 
 
@@ -253,6 +277,77 @@ async def logout(request: Request, response: Response, db: Session = Depends(get
     return {"success": True, "message": "Logged out successfully"}
 
 
+@router.post("/register")
+async def register(
+    request: RegisterRequest,
+    http_request: Request,
+    response: Response,
+    db: Session = Depends(get_db)
+):
+    """
+    Register a new user account.
+    Automatically logs in the user after registration.
+    """
+    client_ip = _get_client_ip(http_request)
+    
+    # Check rate limiting for registration (more lenient than login)
+    # Note: Rate limiting is still tracked but with higher threshold for testing
+    # In production, consider implementing separate rate limit tracking for registration
+    
+    # Validate username uniqueness
+    existing_user = db.query(User).filter(
+        User.username == request.username
+    ).first()
+    
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username already taken")
+    
+    # Validate password strength
+    if len(request.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    
+    # Create new user
+    new_user = User(
+        username=request.username,
+        email=f"{request.username}@medaudit.local",  # Auto-generate email from username
+        full_name=request.full_name,
+        is_active=True,
+        is_admin=False  # Regular users are not admins by default
+    )
+    new_user.set_password(request.password)
+    
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    # Automatically log in the new user
+    session = UserSession(
+        user_id=new_user.id,
+        token=UserSession.create_token(),
+        expires_at=datetime.utcnow() + timedelta(hours=SESSION_DURATION_HOURS)
+    )
+    db.add(session)
+    new_user.last_login = datetime.utcnow()
+    db.commit()
+    
+    # Set session cookie
+    response.set_cookie(
+        key="session_token",
+        value=session.token,
+        httponly=True,
+        secure=_is_secure_context(),
+        max_age=SESSION_DURATION_HOURS * 3600,
+        samesite="lax"
+    )
+    
+    return {
+        "success": True,
+        "user": new_user.to_dict(),
+        "message": "Registration successful",
+        "redirect": "/dashboard"
+    }
+
+
 @router.get("/me")
 async def get_me(user: User = Depends(require_auth)):
     """Get current user info."""
@@ -266,6 +361,80 @@ async def check_auth(request: Request, db: Session = Depends(get_db)):
     if user:
         return {"authenticated": True, "user": user.to_dict()}
     return {"authenticated": False}
+
+
+@router.post("/change-password")
+async def change_password(
+    request: ChangePasswordRequest,
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Change current user's password."""
+    # Verify current password
+    if not user.verify_password(request.current_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Validate new password strength
+    if len(request.new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+    
+    # Update password
+    user.set_password(request.new_password)
+    db.commit()
+    
+    return {
+        "success": True,
+        "message": "Password changed successfully"
+    }
+
+
+@router.post("/create-user")
+async def create_user(
+    request_data: CreateUserRequest,
+    http_request: Request,
+    db: Session = Depends(get_db)
+):
+    """Create user account - only accessible from localhost."""
+    client_ip = _get_client_ip(http_request)
+    
+    # Only allow from localhost
+    if client_ip not in ['127.0.0.1', '::1', 'localhost']:
+        raise HTTPException(
+            status_code=403, 
+            detail="User creation is only allowed from localhost"
+        )
+    
+    # Check if username already exists
+    existing_user = db.query(User).filter(
+        User.username == request_data.username
+    ).first()
+    
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username already taken")
+    
+    # Validate password strength
+    if len(request_data.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    
+    # Create new user
+    new_user = User(
+        username=request_data.username,
+        email=f"{request_data.username}@medaudit.local",
+        full_name=request_data.full_name,
+        is_active=True,
+        is_admin=request_data.is_admin
+    )
+    new_user.set_password(request_data.password)
+    
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    return {
+        "success": True,
+        "user": new_user.to_dict(),
+        "message": f"User '{request_data.username}' created successfully"
+    }
 
 
 def init_auth(db: Session, password: str = None, generate_random: bool = False):

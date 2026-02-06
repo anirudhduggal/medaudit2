@@ -389,6 +389,12 @@ class ServerInstance(Base):
         self.message_log = log[-1000:]
 
     def to_dict(self, include_logs: bool = False):
+        """
+        Convert server instance to dictionary for API response.
+        
+        Security: Does NOT expose cert_path or key_path to prevent
+        information disclosure about server file system paths.
+        """
         result = {
             "id": self.id,
             "project_id": self.project_id,
@@ -396,6 +402,7 @@ class ServerInstance(Base):
             "host": self.host,
             "port": self.port,
             "use_tls": self.use_tls,
+            # cert_path and key_path intentionally excluded for security
             "status": self.status,
             "total_connections": self.total_connections,
             "total_messages": self.total_messages,
@@ -428,18 +435,21 @@ class DatabaseManager:
         """
         Create or update admin user with specified password.
         
-        Security: No default password. Must either provide a password or set generate_random=True.
+        Default credentials: username='admin', password='admin123'
+        For production, use --password flag to set a custom password or --generate-password for random.
         """
         import secrets
         import string
         
-        # Generate random password if requested or if no password provided
-        # SECURITY: Never use a weak default password
-        if generate_random or password is None:
+        # Generate random password if explicitly requested
+        if generate_random:
             # Generate a cryptographically secure random password
             # 20 chars from alphanumeric + special = ~130 bits of entropy
             alphabet = string.ascii_letters + string.digits + "!@#$%^&*()-_=+"
             password = ''.join(secrets.choice(alphabet) for _ in range(20))
+        elif password is None:
+            # Use default password for convenience (can be changed via CLI flags)
+            password = "admin123"
         
         admin = session.query(User).filter(User.username == "admin").first()
         

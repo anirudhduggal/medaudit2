@@ -50,6 +50,8 @@
                     <i class="bi bi-person-circle me-1"></i> <span id="userName">User</span>
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#changePasswordModal"><i class="bi bi-key me-2"></i>Change Password</a></li>
+                    <li><hr class="dropdown-divider"></li>
                     <li><a class="dropdown-item" href="#" onclick="logout()"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
                 </ul>
             </div>
@@ -91,6 +93,40 @@
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                         <button type="submit" class="btn btn-create text-white">Create Project</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div class="modal fade" id="changePasswordModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-key me-2"></i>Change Password</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="changePasswordForm">
+                    <div class="modal-body">
+                        <div id="passwordAlert" class="alert d-none" role="alert"></div>
+                        <div class="mb-3">
+                            <label class="form-label">Current Password *</label>
+                            <input type="password" class="form-control" id="currentPassword" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">New Password *</label>
+                            <input type="password" class="form-control" id="newPassword" required minlength="8">
+                            <div class="form-text">Minimum 8 characters</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Confirm New Password *</label>
+                            <input type="password" class="form-control" id="confirmPassword" required minlength="8">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-create text-white">Update Password</button>
                     </div>
                 </form>
             </div>
@@ -206,6 +242,69 @@
             await fetch('/auth/logout', { method: 'POST' });
             window.location.href = '/login';
         }
+
+        // Change password handler
+        document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const alert = document.getElementById('passwordAlert');
+            alert.classList.add('d-none');
+
+            const currentPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            // Validate passwords match
+            if (newPassword !== confirmPassword) {
+                alert.className = 'alert alert-danger';
+                alert.textContent = 'New passwords do not match';
+                alert.classList.remove('d-none');
+                return;
+            }
+
+            // Validate password length
+            if (newPassword.length < 8) {
+                alert.className = 'alert alert-danger';
+                alert.textContent = 'Password must be at least 8 characters';
+                alert.classList.remove('d-none');
+                return;
+            }
+
+            try {
+                const response = await fetch('/auth/change-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        current_password: currentPassword,
+                        new_password: newPassword
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    alert.className = 'alert alert-success';
+                    alert.textContent = 'Password changed successfully!';
+                    alert.classList.remove('d-none');
+                    
+                    // Reset form
+                    document.getElementById('changePasswordForm').reset();
+                    
+                    // Close modal after 2 seconds
+                    setTimeout(() => {
+                        bootstrap.Modal.getInstance(document.getElementById('changePasswordModal')).hide();
+                        alert.classList.add('d-none');
+                    }, 2000);
+                } else {
+                    alert.className = 'alert alert-danger';
+                    alert.textContent = data.detail || 'Failed to change password';
+                    alert.classList.remove('d-none');
+                }
+            } catch (error) {
+                alert.className = 'alert alert-danger';
+                alert.textContent = 'Error: ' + error.message;
+                alert.classList.remove('d-none');
+            }
+        });
 
         function escapeHtml(text) {
             const div = document.createElement('div');

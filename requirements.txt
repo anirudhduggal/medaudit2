@@ -30,6 +30,11 @@ reportlab>=4.0.0
 # Testing
 pytest>=8.0.0
 
+# AI Analysis (Optional - Install based on your provider)
+# Uncomment the provider you want to use:
+# openai>=1.0.0          # For OpenAI GPT-4
+# anthropic>=0.18.0      # For Anthropic Claude
+
 # Post-install steps:
 # 1. Download spacy model: python -m spacy download en_core_web_lg
 # 2. Initialize database: python -c "from medaudit.web.database import get_db_manager; get_db_manager().create_tables()"

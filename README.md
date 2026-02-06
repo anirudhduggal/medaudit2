@@ -122,6 +122,68 @@ curl -X POST http://localhost:8080/ \
 
 ---
 
+### 5. Web UI Platform
+**Full-featured web interface for comprehensive security auditing**
+
+- ✅ **User Authentication**: Secure session-based authentication with PBKDF2 password hashing
+- ✅ **User Registration**: Self-service account creation with tabbed login/register interface
+- ✅ **Project Management**: Create and manage security audit projects
+- ✅ **HL7 Client**: Interactive client with malformed payload library (buffer overflow, SQLi, XSS, etc.)
+- ✅ **HL7 Fuzzer**: Web-based fuzzer with YAML/JSON rule configuration
+- ✅ **Traffic Analysis**: PCAP upload with network visualization and sequence diagrams
+- ✅ **Server Management**: Create and manage multiple HL7 server instances
+- ✅ **Export Features**: Generate PDF security reports and JSON exports
+
+**Getting Started:**
+
+New users can register directly from the login page using the "Register" tab.
+
+**Default Admin Credentials** (for initial setup):
+```
+Username: admin
+Password: admin123
+```
+
+⚠️ **IMPORTANT**: Change the default admin password immediately after first login!
+
+**Usage:**
+```bash
+# Start with default credentials
+python -m medaudit web
+
+# Start with custom password
+python -m medaudit web --password "SecurePassword123!"
+
+# Start with auto-generated secure password
+python -m medaudit web --generate-password
+
+# Specify host and port
+python -m medaudit web --host 0.0.0.0 --port 8080
+```
+
+**Access:**
+- Web UI: http://lauthentication (protection against brute force)
+- 👤 Self-service user registration with email validation
+- API Docs: http://localhost:8080/docs
+
+**Features:**
+- 📊 Dashboard with project overview
+- 🔐 Rate-limited login (protection against brute force)
+- 🧪 Built-in malformed payload library for testing
+- 📈 Traffic visualization with Cytoscape.js
+- 📄 PDF report generation
+- 🔄 Session management (24-hour expiry)
+- 🤖 **AI-Powered Analysis** - Ask questions, brainstorm pentesting strategies, and get security recommendations using OpenAI, Anthropic Claude, or local models (Ollama/LM Studio). The AI has access to **comprehensive project context** including all traffic logs, PCAP data, HL7 messages, PII findings, fuzzing results, and server logs.
+
+**Documentation:**
+- 🔐 [Admin Credentials & Security](docs/ADMIN_CREDENTIALS.md)
+- 🤖 [AI Analysis Guide](docs/AI_ANALYSIS_GUIDE.md) - Full feature documentation
+- 🚀 [AI Quick Start](docs/AI_QUICK_START.md) - Get started in 5 minutes
+- 📊 [AI Context Guide](docs/AI_CONTEXT_GUIDE.md) - Understanding data exposure
+- 📝 [Default Admin Implementation](docs/DEFAULT_ADMIN_IMPLEMENTATION.md)
+
+---
+
 ## 🚀 Quick Start
 
 ### Installation
@@ -164,10 +226,12 @@ python -m medaudit analyze medaudit/testFiles/hl7_v2_unencrypted_synthetic.pcap
 | Command | Description | Example |
 |---------|-------------|---------|
 | `analyze` | Analyze PCAP file | `python -m medaudit analyze <file.pcap>` |
+| `web` | Start web UI platform | `python -m medaudit web --port 8080` |
 | `proxy` | Start HTTP-to-HL7 proxy | `python -m medaudit proxy --port 8080` |
 | `config` | Manage configuration | `python -m medaudit config --show` |
 | `hl7server start` | Start HL7 server | `python -m medaudit.hl7server start` |
 | `hl7server config` | Configure HL7 server | `python -m medaudit.hl7server config --set port 2576` |
+| `fuzzer run` | Run HL7 fuzzer | `python -m medaudit.fuzzer run -c config.yaml` |
 
 ### Configuration
 
@@ -209,7 +273,7 @@ python -m medaudit config --create
 medaudit2/
 ├── medaudit/                      # Main package (all runtime data inside)
 │   ├── __init__.py                # Package metadata + AI instructions
-│   ├── __main__.py                # CLI dispatcher (analyze|proxy|config)
+│   ├── __main__.py                # CLI dispatcher (analyze|web|proxy|config|fuzzer)
 │   ├── paths.py                   # Centralized path management
 │   │
 │   ├── config/                    # Configuration module
@@ -245,25 +309,52 @@ medaudit2/
 │   ├── proxy/                     # HTTP→HL7 proxy
 │   │   └── proxy_server.py        # HTTP server + MLLP conversion
 │   │
-│   ├── web/                       # Web UI (planned)
-│   ├── fuzzer/                    # HL7 fuzzer (planned)
+│   ├── fuzzer/                    # HL7 Fuzzer
+│   │   ├── __main__.py            # Fuzzer CLI entry point
+│   │   ├── cli.py                 # Fuzzer commands
+│   │   ├── engine.py              # Fuzzing execution engine
+│   │   ├── strategies.py          # Mutation strategies
+│   │   ├── protocol.py            # HL7/MLLP protocol handling
+│   │   └── malicious_hl7_server.py # Attack server (17 modes)
+│   │
+│   ├── web/                       # Web UI Platform
+│   │   ├── app.py                 # FastAPI main app + routes
+│   │   ├── auth.py                # Authentication + session management
+│   │   ├── database.py            # SQLAlchemy models (User, Project, etc.)
+│   │   ├── projects.py            # Project CRUD API
+│   │   ├── client_api.py          # HL7 Client API + malformed payloads
+│   │   ├── fuzzer_api.py          # Fuzzer Web API
+│   │   ├── traffic_api.py         # PCAP analysis + visualization
+│   │   ├── server_api.py          # Managed HL7 server instances
+│   │   ├── ai_api.py              # AI Analysis API (NEW)
+│   │   └── templates/             # Jinja2 HTML templates
+│   │       └── project.html       # Project view with AI tab
+│   │
 │   └── testFiles/                 # Sample PCAP files
 │       ├── hl7_v2_unencrypted_synthetic.pcap
 │       └── hl7_v2_unencrypted_synthetic_no_pii.pcap
 │
-├── tests/                         # Test suite (outside package)
+├── docs/                          # Documentation
+│   ├── README.md                  # Documentation index
+│   ├── AI_ANALYSIS_GUIDE.md       # Complete AI feature guide
+│   ├── AI_QUICK_START.md          # 5-minute AI setup guide
+│   ├── AI_CONTEXT_GUIDE.md        # AI data access documentation
+│   ├── ADMIN_CREDENTIALS.md       # Admin security guide
+│   └── DEFAULT_ADMIN_IMPLEMENTATION.md
+│
+├── tests/                         # Test suite
 │   ├── pytest.ini                 # Pytest configuration
 │   ├── conftest.py                # Shared fixtures
-│   ├── test_pii_check.py          # PII detection tests (3 tests)
-│   ├── test_logging_system.py     # Logging tests
+│   ├── test_pii_check.py          # PII detection tests
+│   ├── test_ai_api.py             # AI API tests
 │   ├── test_hl7_server_client.py  # HL7 integration tests
-│   ├── test_pii_on_pcap.py        # PCAP analysis tests
-│   └── analyze_pcap_pii.py        # Manual PCAP analysis script
+│   ├── test_admin_creation.py     # Admin user tests
+│   ├── verify_ai_feature.py       # AI feature verification
+│   └── results/                   # Test reports
 │
-├── venv/                          # Virtual environment
+├── pcap-samples/                  # Sample traffic captures
 ├── requirements.txt               # Python dependencies
 ├── README.md                      # This file
-├── CLEANUP_SUMMARY.md             # Recent refactoring notes
 └── .gitignore
 ```
 
@@ -344,19 +435,18 @@ Benefits: Package encapsulation, simple distribution, clean root directory
 
 ## 🚧 Planned Features (Future Releases)
 
-### Web Platform
-- 🔲 User authentication & session management
-- 🔲 Project management dashboard
-- 🔲 Interactive HL7 client with malformed payload library
-- 🔲 Automated fuzzer with YAML/JSON rule configuration
-- 🔲 PCAP upload & visualization (network graphs, sequence diagrams)
-- 🔲 PDF/JSON report generation
+### Enhanced Web Platform
+- 🔲 Two-factor authentication (2FA)
+- 🔲 User role management (viewer, analyst, admin)
+- 🔲 Real-time collaboration features
+- 🔲 Advanced analytics dashboard
+- 🔲 Custom report templates
 
 ### Advanced Fuzzing
-- 🔲 Standalone HL7 fuzzer CLI with mutation strategies
-- 🔲 Malicious HL7 server (17+ attack modes: no ACK, broken ACK, flood, delay, overflow)
 - 🔲 Genetic algorithm-based fuzzing
-- 🔲 Custom mutation rule builder
+- 🔲 Coverage-guided fuzzing
+- 🔲 Crash analysis and deduplication
+- 🔲 Automated regression testing
 
 ### FHIR Support
 - 🔲 FHIR R4 message parsing

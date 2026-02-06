@@ -55,6 +55,14 @@ def main():
     config_parser.add_argument('--create', action='store_true', help='Create default configuration file')
     config_parser.add_argument('--show', action='store_true', help='Show current configuration')
 
+    # User management command
+    user_parser = subparsers.add_parser('user', help='User management (localhost only)')
+    user_parser.add_argument('--create', action='store_true', help='Create a new user')
+    user_parser.add_argument('--username', type=str, help='Username for the new user')
+    user_parser.add_argument('--password', type=str, help='Password for the new user')
+    user_parser.add_argument('--full-name', type=str, help='Full name (optional)')
+    user_parser.add_argument('--admin', action='store_true', help='Make user an admin')
+
     args = parser.parse_args()
 
     if args.command == 'analyze':
@@ -77,6 +85,41 @@ def main():
             print(json.dumps(config.config, indent=2))
         else:
             print("Use --create to generate default config or --show to display current config")
+    elif args.command == 'user':
+        if args.create:
+            if not args.username or not args.password:
+                print("Error: --username and --password are required")
+                sys.exit(1)
+            
+            import requests
+            url = "http://127.0.0.1:8080/auth/create-user"
+            
+            try:
+                response = requests.post(url, json={
+                    "username": args.username,
+                    "password": args.password,
+                    "full_name": args.full_name,
+                    "is_admin": args.admin
+                })
+                
+                if response.ok:
+                    data = response.json()
+                    print(f"✓ User '{args.username}' created successfully")
+                    if args.admin:
+                        print(f"  Role: Administrator")
+                    else:
+                        print(f"  Role: Regular user")
+                else:
+                    error = response.json().get('detail', 'Unknown error')
+                    print(f"✗ Failed to create user: {error}")
+                    sys.exit(1)
+            except requests.exceptions.ConnectionError:
+                print("✗ Error: Cannot connect to server at http://127.0.0.1:8080")
+                print("  Make sure the web server is running: python -m medaudit web")
+                sys.exit(1)
+        else:
+            print("Use --create with --username and --password to create a user")
+            print("Example: python -m medaudit user --create --username john --password pass123 --full-name 'John Doe'")
     else:
         parser.print_help()
         sys.exit(1)

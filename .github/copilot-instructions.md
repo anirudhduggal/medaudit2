@@ -32,23 +32,23 @@ medaudit/
 │   ├── medaudit.db                   # SQLite database
 │   └── artifacts/                    # Project artifacts (PCAPs, etc.)
 ├── logs/                             # ★ Runtime logs (inside medaudit)
-└── web/
+├── web/
     ├── app.py                        # FastAPI main app + page routes
-    ├── auth.py                       # User authentication + session management
+    ├── auth.py                       # User authentication + registration + session management
     ├── database.py                   # SQLAlchemy models (User, Project, Analysis, etc.)
     ├── projects.py                   # Project CRUD API (/api/projects)
     ├── client_api.py                 # HL7 Client API + malformed payload library
     ├── fuzzer_api.py                 # HL7 Fuzzer Web API (imports from fuzzer module)
     ├── traffic_api.py                # PCAP upload + analysis + visualization
     ├── server_api.py                 # Managed HL7 server instances
+    ├── ai_api.py                     # ★ AI Analysis API (OpenAI, Anthropic, local models)
     ├── export_api.py                 # PDF/JSON report generation
     ├── analyzer.py                   # Enhanced PCAP analyzer for web UI
     └── templates/                    # Jinja2 HTML templates
         ├── index.html                # Landing page
-        ├── login.html                # User login
-        ├── register.html             # User registration
+        ├── login.html                # ★ Login/Register page (tabbed interface)
         ├── dashboard.html            # Project listing + management
-        └── project.html              # Project detail (Client/Fuzzer/Traffic tabs)
+        └── project.html              # Project detail (Client/Fuzzer/Traffic/Server/AI tabs)
 ```
 
 ## Essential Commands
@@ -92,10 +92,18 @@ python3 -m medaudit config --create               # Generate default config file
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/auth/login` | POST | User login (username, password) → session cookie |
-| `/auth/register` | POST | Create account (username, email, password) |
+| `/auth/register` | POST | ★ Self-service registration (username, email, password, full_name) → auto-login |
 | `/auth/logout` | POST | End session |
 | `/auth/me` | GET | Current user info |
 | `/auth/check` | GET | Check authentication status |
+
+**Registration Features:**
+- Rate-limited to prevent abuse (same limits as login: 5 attempts per 5 minutes)
+- Username and email uniqueness validation
+- Password strength requirements (minimum 8 characters)
+- PBKDF2-SHA256 password hashing (600,000 iterations)
+- Automatic session creation after successful registration
+- New users are non-admin by default (is_admin=False)
 
 ### Project Management (`/api/projects/*`)
 | Endpoint | Method | Description |
