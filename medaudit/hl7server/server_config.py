@@ -17,7 +17,7 @@ from typing import Optional, Dict, Any
 
 # Import centralized paths
 try:
-    from medaudit.paths import CONFIG_DIR, LOGS_DIR
+    from medaudit.utils import CONFIG_DIR, LOGS_DIR
 except ImportError:
     # Fallback if paths module not available
     CONFIG_DIR = Path(__file__).parent.parent / "config"

@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from .database import get_db, Project, ServerInstance, User
 from .auth import require_auth
-from medaudit.paths import get_artifacts_dir
+from medaudit.utils import get_artifacts_dir
 
 router = APIRouter(prefix="/api/server", tags=["server"])
 

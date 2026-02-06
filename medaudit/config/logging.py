@@ -9,7 +9,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from medaudit.paths import LOGS_DIR
+from medaudit.utils import LOGS_DIR
 
 
 class BaseJsonLogger:

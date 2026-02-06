@@ -1,27 +1,19 @@
 # Medaudit Path Configuration
-# Centralized path management for data, config, and logs
-
 """
-Path Configuration Module
+Centralized path management for all Medaudit components.
 
-This module provides centralized path management for all Medaudit components.
-All paths are relative to the medaudit package directory to keep data organized.
+All paths are relative to the medaudit package directory for organized data storage.
 
 Directory Structure (inside medaudit/):
     medaudit/
     ├── data/
     │   ├── medaudit.db          # SQLite database
     │   └── artifacts/           # Project artifacts (PCAPs, exports)
-    │       └── projects/
-    │           └── {project_id}/
-    │               └── pcaps/
+    │       └── projects/{id}/pcaps/
     ├── config/
     │   └── medaudit.json        # Configuration file
     └── logs/
         └── YYYY-MM-DD/          # Date-organized logs
-            ├── connections.jsonl
-            ├── server_events.jsonl
-            └── hl7_messages.jsonl
 """
 
 import os
@@ -29,7 +21,7 @@ from pathlib import Path
 from typing import Optional
 
 # Get the medaudit package directory
-PACKAGE_DIR = Path(__file__).parent
+PACKAGE_DIR = Path(__file__).parent.parent
 
 # Base directories - all inside the medaudit package
 DATA_DIR = PACKAGE_DIR / "data"
@@ -45,14 +37,7 @@ CONFIG_FILE = CONFIG_DIR / "medaudit.json"
 
 def ensure_directories():
     """Create all required directories if they don't exist."""
-    directories = [
-        DATA_DIR,
-        ARTIFACTS_DIR,
-        PROJECTS_ARTIFACTS_DIR,
-        CONFIG_DIR,
-        LOGS_DIR,
-    ]
-    for directory in directories:
+    for directory in [DATA_DIR, ARTIFACTS_DIR, PROJECTS_ARTIFACTS_DIR, CONFIG_DIR, LOGS_DIR]:
         directory.mkdir(parents=True, exist_ok=True)
 
 
@@ -87,30 +72,14 @@ def get_artifacts_dir() -> Path:
 
 
 def get_project_artifacts_dir(project_id: str) -> Path:
-    """
-    Get the artifacts directory for a specific project.
-    
-    Args:
-        project_id: The project UUID
-        
-    Returns:
-        Path to the project's artifacts directory
-    """
+    """Get the artifacts directory for a specific project."""
     project_dir = PROJECTS_ARTIFACTS_DIR / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
     return project_dir
 
 
 def get_project_pcaps_dir(project_id: str) -> Path:
-    """
-    Get the PCAP directory for a specific project.
-    
-    Args:
-        project_id: The project UUID
-        
-    Returns:
-        Path to the project's PCAP directory
-    """
+    """Get the PCAP directory for a specific project."""
     pcaps_dir = get_project_artifacts_dir(project_id) / "pcaps"
     pcaps_dir.mkdir(parents=True, exist_ok=True)
     return pcaps_dir
@@ -123,17 +92,13 @@ def get_config_file() -> Path:
 
 def get_config_search_paths() -> list:
     """
-    Get the list of paths to search for configuration files.
+    Get the list of paths to search for configuration files in order of precedence.
     
-    Order of precedence:
     1. medaudit/config/medaudit.json (package-level, preferred)
     2. ./config/medaudit.json (repo-level fallback)
     3. ./medaudit.json (backwards-compatible)
     4. ~/.medaudit.json (user home)
     5. ~/.config/medaudit.json (XDG config)
-    
-    Returns:
-        List of Path objects to search
     """
     return [
         CONFIG_FILE,  # Package-level (preferred)

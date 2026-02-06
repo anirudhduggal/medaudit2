@@ -17,7 +17,7 @@ import secrets
 import hmac
 
 # Import centralized paths
-from medaudit.paths import get_database_path, DATABASE_PATH
+from medaudit.utils import get_database_path, DATABASE_PATH
 
 # Password hashing configuration using PBKDF2 (standard library, secure)
 PBKDF2_ITERATIONS = 600000  # OWASP recommended minimum for PBKDF2-SHA256

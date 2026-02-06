@@ -5,8 +5,9 @@ Medical device security analyzer for HL7/FHIR traffic. Detects encryption status
 ## Architecture Overview
 ```
 medaudit/
-├── __main__.py                        # CLI dispatcher (analyze|web|proxy|config|fuzzer)
-├── paths.py                           # ★ Centralized path management (data, config, logs)
+├── __main__.py                        # CLI dispatcher (analyze|web|proxy|config|fuzzer|user)
+├── utils/                             # ★ Utilities and helpers
+│   └── paths.py                       # Centralized path management (data, config, logs)
 ├── analysis/
 │   ├── traffic/traffic_analysis.py   # PCAP parsing, encryption heuristics, HL7 extraction
 │   └── pii/pii_check.py              # Presidio analyzer + custom recognizers

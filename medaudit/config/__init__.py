@@ -48,7 +48,7 @@ class Config:
     def _load_config_file(self):
         """Load configuration from medaudit.json if it exists."""
         # Import here to avoid circular dependency
-        from medaudit.paths import get_config_search_paths
+        from medaudit.utils import get_config_search_paths
 
         config_paths = get_config_search_paths()
 
@@ -87,7 +87,7 @@ class Config:
     def create_default_config(self, path=None):
         """Create a default configuration file."""
         if path is None:
-            from medaudit.paths import CONFIG_DIR
+            from medaudit.utils import CONFIG_DIR
             path = CONFIG_DIR / "medaudit.json"
 
         # Create directory if it doesn't exist

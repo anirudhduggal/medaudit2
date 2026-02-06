@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from .database import get_db, Project, PcapAnalysis, User
 from .auth import require_auth
 from .analyzer import analyze_pcap_detailed
-from medaudit.paths import get_artifacts_dir
+from medaudit.utils import get_artifacts_dir
 
 router = APIRouter(prefix="/api/traffic", tags=["traffic"])
 

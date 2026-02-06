@@ -274,7 +274,9 @@ medaudit2/
 ├── medaudit/                      # Main package (all runtime data inside)
 │   ├── __init__.py                # Package metadata + AI instructions
 │   ├── __main__.py                # CLI dispatcher (analyze|web|proxy|config|fuzzer)
-│   ├── paths.py                   # Centralized path management
+│   │
+│   ├── utils/                     # Utilities and helpers
+│   │   └── paths.py               # Centralized path management
 │   │
 │   ├── config/                    # Configuration module
 │   │   ├── __init__.py            # Config class (JSON loading)
@@ -424,7 +426,7 @@ Results Report (JSON format)
 | **SQLAlchemy** | Database ORM (planned) | ≥2.1.0 |
 
 ### Centralized Path Management
-All runtime data uses `medaudit/paths.py`:
+All runtime data uses `medaudit/utils/paths.py`:
 - **Config**: `medaudit/config/`
 - **Data**: `medaudit/data/` (database + artifacts)
 - **Logs**: `medaudit/logs/YYYY-MM-DD/`
