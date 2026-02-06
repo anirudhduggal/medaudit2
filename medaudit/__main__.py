@@ -45,6 +45,10 @@ def main():
                            help='Host to bind the web server (default: 0.0.0.0)')
     web_parser.add_argument('--port', type=int, default=8080,
                            help='Port for the web server (default: 8080)')
+    web_parser.add_argument('--password', type=str, default=None,
+                           help='Set custom admin password')
+    web_parser.add_argument('--generate-password', action='store_true',
+                           help='Generate a random secure password for admin')
 
     # Config command
     config_parser = subparsers.add_parser('config', help='Configuration management')
@@ -59,7 +63,12 @@ def main():
         start_proxy(http_port=args.port, hl7_host=args.hl7_host, hl7_port=args.hl7_port)
     elif args.command == 'web':
         from .web import start_web_server
-        start_web_server(host=args.host, port=args.port)
+        start_web_server(
+            host=args.host, 
+            port=args.port,
+            admin_password=args.password,
+            generate_password=args.generate_password
+        )
     elif args.command == 'config':
         if args.create:
             config.create_default_config()

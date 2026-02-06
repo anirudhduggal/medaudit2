@@ -3,6 +3,7 @@ Server Management API for Medaudit Web Application.
 Provides multi-server configuration, TLS support, and message logging.
 """
 
+import os
 import socket
 import ssl
 import threading
@@ -11,13 +12,97 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from sqlalchemy.orm import Session
 
 from .database import get_db, Project, ServerInstance, User
 from .auth import require_auth
+from medaudit.paths import get_artifacts_dir
 
 router = APIRouter(prefix="/api/server", tags=["server"])
+
+# =============================================================================
+# Security: Path Validation for TLS Certificates
+# =============================================================================
+
+# Allowed directories for TLS certificate files
+# Only allow certs from within the project artifacts or a designated certs directory
+ALLOWED_CERT_DIRS = [
+    get_artifacts_dir(),
+    Path.home() / ".medaudit" / "certs",
+    Path("/etc/ssl/certs"),
+    Path("/etc/ssl/private"),
+]
+
+
+def validate_tls_path(path: Optional[str], field_name: str) -> Optional[str]:
+    """
+    Validate TLS certificate/key path to prevent path traversal attacks.
+    
+    Security checks:
+    - Path must be absolute or will be rejected
+    - Path must not contain traversal sequences
+    - Path must be within allowed directories
+    - Path must exist and be a file
+    
+    Returns validated path or raises HTTPException.
+    """
+    if not path:
+        return None
+    
+    # Normalize and resolve the path
+    try:
+        path_obj = Path(path).resolve()
+    except (ValueError, OSError) as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid {field_name}: {str(e)}"
+        )
+    
+    # Check for path traversal attempts
+    if ".." in path:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid {field_name}: path traversal not allowed"
+        )
+    
+    # Verify the path is within allowed directories
+    is_allowed = False
+    for allowed_dir in ALLOWED_CERT_DIRS:
+        try:
+            allowed_dir = allowed_dir.resolve()
+            if allowed_dir.exists():
+                # Check if path is under this allowed directory
+                try:
+                    path_obj.relative_to(allowed_dir)
+                    is_allowed = True
+                    break
+                except ValueError:
+                    continue
+        except (OSError, ValueError):
+            continue
+    
+    if not is_allowed:
+        allowed_str = ", ".join(str(d) for d in ALLOWED_CERT_DIRS if d.exists())
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid {field_name}: file must be in allowed directories ({allowed_str})"
+        )
+    
+    # Verify file exists
+    if not path_obj.exists():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid {field_name}: file does not exist"
+        )
+    
+    if not path_obj.is_file():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid {field_name}: not a file"
+        )
+    
+    return str(path_obj)
 
 # Active server processes
 _active_servers: Dict[str, dict] = {}
@@ -371,6 +456,10 @@ async def create_server(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
+    # SECURITY: Validate TLS certificate paths to prevent path traversal
+    validated_cert_path = validate_tls_path(server_data.cert_path, "cert_path")
+    validated_key_path = validate_tls_path(server_data.key_path, "key_path")
+    
     # Check if port is already in use by another server in this project
     existing = db.query(ServerInstance).filter(
         ServerInstance.project_id == project_id,
@@ -390,8 +479,8 @@ async def create_server(
         host=server_data.host,
         port=server_data.port,
         use_tls=server_data.use_tls,
-        cert_path=server_data.cert_path,
-        key_path=server_data.key_path
+        cert_path=validated_cert_path,  # Use validated path
+        key_path=validated_key_path      # Use validated path
     )
     
     db.add(server)
@@ -507,6 +596,14 @@ async def update_server(
             detail="Cannot update a running server. Stop it first."
         )
     
+    # SECURITY: Validate TLS certificate paths if provided
+    validated_cert_path = None
+    validated_key_path = None
+    if server_data.cert_path is not None:
+        validated_cert_path = validate_tls_path(server_data.cert_path, "cert_path")
+    if server_data.key_path is not None:
+        validated_key_path = validate_tls_path(server_data.key_path, "key_path")
+    
     # Update fields
     if server_data.name is not None:
         server.name = server_data.name
@@ -516,10 +613,10 @@ async def update_server(
         server.port = server_data.port
     if server_data.use_tls is not None:
         server.use_tls = server_data.use_tls
-    if server_data.cert_path is not None:
-        server.cert_path = server_data.cert_path
-    if server_data.key_path is not None:
-        server.key_path = server_data.key_path
+    if validated_cert_path is not None:
+        server.cert_path = validated_cert_path
+    if validated_key_path is not None:
+        server.key_path = validated_key_path
     
     db.commit()
     db.refresh(server)
@@ -620,15 +717,21 @@ async def stop_server(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    # Stop server
-    if server_id in _active_servers and "server" in _active_servers[server_id]:
-        _active_servers[server_id]["server"].stop()
+    # Stop server and ensure port is released
+    if server_id in _active_servers:
+        if "server" in _active_servers[server_id]:
+            _active_servers[server_id]["server"].stop()
+        _active_servers[server_id]["status"] = "stopped"
     
     # Update database
     server.status = "stopped"
     db.commit()
     
-    return {"success": True}
+    # Give time for socket to fully close and port to be released
+    import time
+    time.sleep(0.3)
+    
+    return {"success": True, "message": "Server stopped"}
 
 
 @router.delete("/projects/{project_id}/servers/{server_id}")

@@ -14,25 +14,58 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, Session
 import hashlib
 import secrets
+import hmac
 
 # Import centralized paths
 from medaudit.paths import get_database_path, DATABASE_PATH
 
+# Password hashing configuration using PBKDF2 (standard library, secure)
+PBKDF2_ITERATIONS = 600000  # OWASP recommended minimum for PBKDF2-SHA256
+PBKDF2_HASH_NAME = 'sha256'
+SALT_LENGTH = 32  # 256 bits
+
 
 def hash_password(password: str) -> str:
-    """Hash a password using SHA-256 with salt."""
-    salt = secrets.token_hex(16)
-    hash_obj = hashlib.sha256((salt + password).encode())
-    return f"{salt}${hash_obj.hexdigest()}"
+    """
+    Hash a password using PBKDF2-SHA256 with secure parameters.
+    
+    Returns format: iterations$salt$hash (all hex encoded)
+    """
+    salt = secrets.token_bytes(SALT_LENGTH)
+    password_hash = hashlib.pbkdf2_hmac(
+        PBKDF2_HASH_NAME,
+        password.encode('utf-8'),
+        salt,
+        PBKDF2_ITERATIONS
+    )
+    return f"{PBKDF2_ITERATIONS}${salt.hex()}${password_hash.hex()}"
 
 
 def verify_password(password: str, hashed: str) -> bool:
-    """Verify a password against a hash."""
+    """
+    Verify a password against a PBKDF2 hash.
+    Uses constant-time comparison to prevent timing attacks.
+    """
     try:
-        salt, stored_hash = hashed.split('$')
-        hash_obj = hashlib.sha256((salt + password).encode())
-        return hash_obj.hexdigest() == stored_hash
-    except:
+        parts = hashed.split('$')
+        if len(parts) != 3:
+            return False
+        
+        iterations = int(parts[0])
+        salt = bytes.fromhex(parts[1])
+        stored_hash = bytes.fromhex(parts[2])
+        
+        # Compute hash of provided password
+        computed_hash = hashlib.pbkdf2_hmac(
+            PBKDF2_HASH_NAME,
+            password.encode('utf-8'),
+            salt,
+            iterations
+        )
+        
+        # Constant-time comparison to prevent timing attacks
+        return hmac.compare_digest(computed_hash, stored_hash)
+    except (ValueError, TypeError):
         return False
 
 # Database setup
@@ -355,8 +388,8 @@ class ServerInstance(Base):
         # Keep last 1000 entries
         self.message_log = log[-1000:]
 
-    def to_dict(self):
-        return {
+    def to_dict(self, include_logs: bool = False):
+        result = {
             "id": self.id,
             "project_id": self.project_id,
             "name": self.name,
@@ -369,6 +402,9 @@ class ServerInstance(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None
         }
+        if include_logs:
+            result["message_log"] = self.message_log or []
+        return result
 
 
 # Database session management
@@ -388,21 +424,39 @@ class DatabaseManager:
         """Get a new database session."""
         return self.SessionLocal()
     
-    def create_default_admin(self, session: Session):
-        """Create default admin user if no users exist."""
-        if session.query(User).count() == 0:
+    def create_or_update_admin(self, session: Session, password: str = None, generate_random: bool = False):
+        """
+        Create or update admin user with specified password.
+        
+        Security: No default password. Must either provide a password or set generate_random=True.
+        """
+        import secrets
+        import string
+        
+        # Generate random password if requested or if no password provided
+        # SECURITY: Never use a weak default password
+        if generate_random or password is None:
+            # Generate a cryptographically secure random password
+            # 20 chars from alphanumeric + special = ~130 bits of entropy
+            alphabet = string.ascii_letters + string.digits + "!@#$%^&*()-_=+"
+            password = ''.join(secrets.choice(alphabet) for _ in range(20))
+        
+        admin = session.query(User).filter(User.username == "admin").first()
+        
+        if admin is None:
             admin = User(
                 username="admin",
                 email="admin@medaudit.local",
                 full_name="Administrator",
                 is_admin=True
             )
-            admin.set_password("admin123")  # Default password - should be changed
             session.add(admin)
-            session.commit()
-            print("Created default admin user: admin / admin123")
-            return admin
-        return None
+        
+        admin.set_password(password)
+        session.commit()
+        session.refresh(admin)  # Ensure changes are persisted
+        
+        return admin, password
 
 
 # Global database manager instance

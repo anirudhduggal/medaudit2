@@ -1,13 +1,17 @@
 """
 Authentication module for Medaudit Web Application.
-Handles user login, registration, and session management.
+Handles admin login and session management.
 """
 
+import os
+import time
+import threading
+from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Dict, Tuple
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from .database import get_db, User, UserSession, get_db_manager
@@ -17,42 +21,106 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 # Session duration
 SESSION_DURATION_HOURS = 24
 
+# Store admin password for display (set during init)
+_admin_password_display: Optional[str] = None
+
+# =============================================================================
+# Rate Limiting for Login Attempts
+# =============================================================================
+
+# Rate limiting configuration
+RATE_LIMIT_WINDOW_SECONDS = 300  # 5 minutes
+RATE_LIMIT_MAX_ATTEMPTS = 5      # Max attempts per window
+RATE_LIMIT_LOCKOUT_SECONDS = 900 # 15 minute lockout after exceeding
+
+# In-memory rate limiting store: {ip: (attempt_count, window_start, lockout_until)}
+_login_attempts: Dict[str, Tuple[int, float, float]] = defaultdict(lambda: (0, 0.0, 0.0))
+_rate_limit_lock = threading.Lock()
+
+
+def _get_client_ip(request: Request) -> str:
+    """Get client IP address from request, handling proxies."""
+    # Check X-Forwarded-For header (if behind proxy)
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        # Take the first IP (original client)
+        return forwarded.split(",")[0].strip()
+    
+    # Fall back to direct client IP
+    if request.client:
+        return request.client.host
+    return "unknown"
+
+
+def _check_rate_limit(ip: str) -> Tuple[bool, Optional[int]]:
+    """
+    Check if IP is rate limited.
+    
+    Returns: (is_allowed, seconds_until_unlock or None)
+    """
+    now = time.time()
+    
+    with _rate_limit_lock:
+        count, window_start, lockout_until = _login_attempts[ip]
+        
+        # Check if currently locked out
+        if lockout_until > now:
+            return False, int(lockout_until - now)
+        
+        # Check if window has expired (reset counter)
+        if now - window_start > RATE_LIMIT_WINDOW_SECONDS:
+            _login_attempts[ip] = (0, now, 0.0)
+            return True, None
+        
+        # Check if under limit
+        if count < RATE_LIMIT_MAX_ATTEMPTS:
+            return True, None
+        
+        # Over limit - apply lockout
+        lockout_until = now + RATE_LIMIT_LOCKOUT_SECONDS
+        _login_attempts[ip] = (count, window_start, lockout_until)
+        return False, RATE_LIMIT_LOCKOUT_SECONDS
+
+
+def _record_login_attempt(ip: str, success: bool):
+    """Record a login attempt for rate limiting."""
+    now = time.time()
+    
+    with _rate_limit_lock:
+        count, window_start, lockout_until = _login_attempts[ip]
+        
+        if success:
+            # Reset on successful login
+            _login_attempts[ip] = (0, 0.0, 0.0)
+        else:
+            # Increment failed attempts
+            if now - window_start > RATE_LIMIT_WINDOW_SECONDS:
+                # New window
+                _login_attempts[ip] = (1, now, lockout_until)
+            else:
+                _login_attempts[ip] = (count + 1, window_start, lockout_until)
+
+
+# =============================================================================
+# Cookie Security Configuration
+# =============================================================================
+
+def _is_secure_context() -> bool:
+    """
+    Determine if we should use secure cookies.
+    Returns True if HTTPS or if MEDAUDIT_SECURE_COOKIES env var is set.
+    """
+    # Allow forcing secure cookies via environment variable
+    if os.environ.get("MEDAUDIT_SECURE_COOKIES", "").lower() in ("1", "true", "yes"):
+        return True
+    # In production, you'd also check the request scheme, but for local dev we default to False
+    return False
+
 
 class LoginRequest(BaseModel):
     """Login request schema."""
     username: str
     password: str
-
-
-class RegisterRequest(BaseModel):
-    """Registration request schema."""
-    username: str
-    email: str
-    password: str
-    full_name: Optional[str] = None
-
-    @validator('username')
-    def username_valid(cls, v):
-        if len(v) < 3:
-            raise ValueError('Username must be at least 3 characters')
-        if not v.isalnum() and '_' not in v:
-            raise ValueError('Username can only contain letters, numbers, and underscores')
-        return v.lower()
-
-    @validator('password')
-    def password_valid(cls, v):
-        if len(v) < 6:
-            raise ValueError('Password must be at least 6 characters')
-        return v
-
-
-class UserResponse(BaseModel):
-    """User response schema."""
-    id: str
-    username: str
-    email: str
-    full_name: Optional[str]
-    is_admin: bool
 
 
 def get_session_token(request: Request) -> Optional[str]:
@@ -82,6 +150,10 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> Optiona
     ).first()
     
     if not session or not session.is_valid():
+        # Clean up invalid session
+        if session:
+            session.is_active = False
+            db.commit()
         return None
     
     return session.user
@@ -95,30 +167,48 @@ def require_auth(request: Request, db: Session = Depends(get_db)) -> User:
     return user
 
 
-def require_admin(request: Request, db: Session = Depends(get_db)) -> User:
-    """Require admin authentication."""
-    user = require_auth(request, db)
-    if not user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return user
-
-
 @router.post("/login")
-async def login(request: LoginRequest, response: Response, db: Session = Depends(get_db)):
-    """Authenticate user and create session."""
-    # Find user
-    user = db.query(User).filter(
-        (User.username == request.username.lower()) | 
-        (User.email == request.username.lower())
-    ).first()
+async def login(
+    login_request: LoginRequest, 
+    request: Request,
+    response: Response, 
+    db: Session = Depends(get_db)
+):
+    """Authenticate admin user and create session."""
+    # Get client IP for rate limiting
+    client_ip = _get_client_ip(request)
     
-    if not user or not user.verify_password(request.password):
-        raise HTTPException(status_code=401, detail="Invalid username or password")
+    # Check rate limiting
+    is_allowed, lockout_seconds = _check_rate_limit(client_ip)
+    if not is_allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many login attempts. Try again in {lockout_seconds} seconds.",
+            headers={"Retry-After": str(lockout_seconds)}
+        )
+    
+    # Only allow admin login
+    user = db.query(User).filter(User.username == "admin").first()
+    
+    if not user or not user.verify_password(login_request.password):
+        # Record failed attempt
+        _record_login_attempt(client_ip, success=False)
+        raise HTTPException(status_code=401, detail="Invalid credentials")
     
     if not user.is_active:
+        _record_login_attempt(client_ip, success=False)
         raise HTTPException(status_code=401, detail="Account is disabled")
     
-    # Create session
+    # Record successful login (resets rate limit)
+    _record_login_attempt(client_ip, success=True)
+    
+    # Invalidate all previous sessions for this user (single session only)
+    db.query(UserSession).filter(
+        UserSession.user_id == user.id,
+        UserSession.is_active == True
+    ).update({"is_active": False})
+    
+    # Create new session
     session = UserSession(
         user_id=user.id,
         token=UserSession.create_token(),
@@ -130,80 +220,37 @@ async def login(request: LoginRequest, response: Response, db: Session = Depends
     user.last_login = datetime.utcnow()
     db.commit()
     
-    # Set cookie
+    # Set cookie with security flags
     response.set_cookie(
         key="session_token",
         value=session.token,
         httponly=True,
+        secure=_is_secure_context(),  # Only send over HTTPS when in secure mode
         max_age=SESSION_DURATION_HOURS * 3600,
         samesite="lax"
     )
     
+    # SECURITY: Do not return token in response body - only in httpOnly cookie
     return {
         "success": True,
-        "user": user.to_dict(),
-        "token": session.token
-    }
-
-
-@router.post("/register")
-async def register(request: RegisterRequest, response: Response, db: Session = Depends(get_db)):
-    """Register a new user."""
-    # Check if username exists
-    if db.query(User).filter(User.username == request.username.lower()).first():
-        raise HTTPException(status_code=400, detail="Username already exists")
-    
-    # Check if email exists
-    if db.query(User).filter(User.email == request.email.lower()).first():
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    # Create user
-    user = User(
-        username=request.username.lower(),
-        email=request.email.lower(),
-        full_name=request.full_name
-    )
-    user.set_password(request.password)
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    
-    # Auto-login after registration
-    session = UserSession(
-        user_id=user.id,
-        token=UserSession.create_token(),
-        expires_at=datetime.utcnow() + timedelta(hours=SESSION_DURATION_HOURS)
-    )
-    db.add(session)
-    db.commit()
-    
-    response.set_cookie(
-        key="session_token",
-        value=session.token,
-        httponly=True,
-        max_age=SESSION_DURATION_HOURS * 3600,
-        samesite="lax"
-    )
-    
-    return {
-        "success": True,
-        "user": user.to_dict(),
-        "token": session.token
+        "user": user.to_dict()
     }
 
 
 @router.post("/logout")
 async def logout(request: Request, response: Response, db: Session = Depends(get_db)):
-    """Logout and invalidate session."""
+    """Logout and completely revoke session."""
     token = get_session_token(request)
     if token:
+        # Find and deactivate the session
         session = db.query(UserSession).filter(UserSession.token == token).first()
         if session:
             session.is_active = False
             db.commit()
     
-    response.delete_cookie("session_token")
-    return {"success": True}
+    # Clear the cookie
+    response.delete_cookie("session_token", path="/")
+    return {"success": True, "message": "Logged out successfully"}
 
 
 @router.get("/me")
@@ -221,8 +268,15 @@ async def check_auth(request: Request, db: Session = Depends(get_db)):
     return {"authenticated": False}
 
 
-# Initialize default admin on startup
-def init_auth(db: Session):
-    """Initialize authentication - create default admin if needed."""
+def init_auth(db: Session, password: str = None, generate_random: bool = False):
+    """Initialize authentication - create/update admin with specified password."""
+    global _admin_password_display
     db_manager = get_db_manager()
-    db_manager.create_default_admin(db)
+    admin, pwd = db_manager.create_or_update_admin(db, password=password, generate_random=generate_random)
+    _admin_password_display = pwd
+    return admin, pwd
+
+
+def get_admin_password_display() -> Optional[str]:
+    """Get the admin password that was set during initialization."""
+    return _admin_password_display

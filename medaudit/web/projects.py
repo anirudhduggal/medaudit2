@@ -64,6 +64,18 @@ async def create_project(
     db: Session = Depends(get_db)
 ):
     """Create a new project."""
+    # Check if project with same name already exists for this user
+    existing = db.query(Project).filter(
+        Project.owner_id == user.id,
+        Project.name == project_data.name
+    ).first()
+    
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"A project named '{project_data.name}' already exists"
+        )
+    
     project = Project(
         name=project_data.name,
         description=project_data.description,
@@ -152,16 +164,41 @@ async def delete_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    # Delete artifacts directory
+    # Stop any running servers for this project
+    try:
+        from .server_api import _active_servers
+        from .database import ServerInstance
+        servers = db.query(ServerInstance).filter(ServerInstance.project_id == project_id).all()
+        for server in servers:
+            if server.id in _active_servers and "server" in _active_servers[server.id]:
+                _active_servers[server.id]["server"].stop()
+                _active_servers[server.id]["status"] = "stopped"
+    except Exception:
+        pass  # Continue with deletion even if stopping fails
+    
+    # Stop any running fuzzing jobs for this project
+    try:
+        from medaudit.fuzzer.engine import stop_job
+        from .database import FuzzingJob
+        jobs = db.query(FuzzingJob).filter(
+            FuzzingJob.project_id == project_id,
+            FuzzingJob.status == "running"
+        ).all()
+        for job in jobs:
+            stop_job(job.id)
+    except Exception:
+        pass  # Continue with deletion even if stopping fails
+    
+    # Delete artifacts directory (medaudit/data/artifacts/projects/<id>)
+    import shutil
     artifacts_path = project.get_artifacts_path(ARTIFACTS_BASE_PATH)
     if artifacts_path.exists():
-        import shutil
         shutil.rmtree(artifacts_path, ignore_errors=True)
     
     db.delete(project)
     db.commit()
     
-    return {"success": True}
+    return {"success": True, "message": "Project and all associated data deleted"}
 
 
 @router.get("/{project_id}/stats")

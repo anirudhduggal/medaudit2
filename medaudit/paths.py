@@ -31,7 +31,7 @@ from typing import Optional
 # Get the medaudit package directory
 PACKAGE_DIR = Path(__file__).parent
 
-# Base directories inside the medaudit package
+# Base directories - all inside the medaudit package
 DATA_DIR = PACKAGE_DIR / "data"
 CONFIG_DIR = PACKAGE_DIR / "config"
 LOGS_DIR = PACKAGE_DIR / "logs"

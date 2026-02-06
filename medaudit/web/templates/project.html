@@ -33,6 +33,7 @@
         .log-sent { background: #3b82f6; color: #fff; }
         .log-received { background: #16a34a; color: #fff; }
         .log-error { background: #dc2626; color: #fff; }
+        .log-info { background: #64748b; color: #fff; }
         .payload-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-bottom: 0.5rem; cursor: pointer; transition: all 0.2s; }
         .payload-card:hover { border-color: var(--primary); background: #eff6ff; }
         .payload-name { font-weight: 600; color: #1e293b; }
@@ -86,8 +87,7 @@
                 <span class="brand-icon"><i class="bi bi-shield-check"></i></span> Medaudit 2.0
             </a>
             <div>
-                <a href="/dashboard" class="btn btn-outline-light btn-sm me-2"><i class="bi bi-arrow-left me-1"></i>Projects</a>
-                <button class="btn btn-outline-light btn-sm" onclick="exportPDF()"><i class="bi bi-file-pdf me-1"></i>Export PDF</button>
+                <a href="/dashboard" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-left me-1"></i>Projects</a>
             </div>
         </div>
     </nav>
@@ -132,12 +132,40 @@
                             <div class="card-header">Target Configuration</div>
                             <div class="card-body config-form">
                                 <div class="mb-3">
-                                    <label>Target Host</label>
-                                    <input type="text" class="form-control" id="clientHost" value="localhost">
+                                    <label>Send Mode</label>
+                                    <select class="form-select" id="sendMode" onchange="updateSendModeUI()">
+                                        <option value="to_server">Send to Server (as Client)</option>
+                                        <option value="to_client">Send to Clients (as Server)</option>
+                                    </select>
+                                    <small class="text-muted" id="sendModeHelp">Connect to a target server and send payloads</small>
                                 </div>
-                                <div class="mb-3">
-                                    <label>Port</label>
-                                    <input type="number" class="form-control" id="clientPort" value="2575">
+                                <div id="clientModeConfig">
+                                    <div class="mb-3">
+                                        <label>Target Host</label>
+                                        <input type="text" class="form-control" id="clientHost" value="localhost">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label>Target Port</label>
+                                        <input type="number" class="form-control" id="clientPort" value="2575">
+                                    </div>
+                                </div>
+                                <div id="serverModeConfig" style="display: none;">
+                                    <div class="mb-3">
+                                        <label>Listen Port</label>
+                                        <input type="number" class="form-control" id="maliciousServerPort" value="2575">
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <button class="btn btn-sm btn-success flex-grow-1" id="maliciousServerBtn" onclick="toggleMaliciousServer()">
+                                            <i class="bi bi-play-fill me-1"></i>Start Server
+                                        </button>
+                                    </div>
+                                    <div id="maliciousServerStatus" class="small text-muted" style="display: none;">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="status-dot status-running"></div>
+                                            <span>Waiting for clients on port <strong id="maliciousServerPortDisplay">2575</strong></span>
+                                        </div>
+                                        <div class="mt-1">Clients connected: <strong id="maliciousClientCount">0</strong></div>
+                                    </div>
                                 </div>
                                 <div class="form-check mb-3">
                                     <input type="checkbox" class="form-check-input" id="clientTLS">
@@ -146,8 +174,30 @@
                             </div>
                         </div>
                         <div class="card">
+                            <div class="card-header"><i class="bi bi-broadcast me-2"></i>HL7 Listener (Proxy)</div>
+                            <div class="card-body config-form">
+                                <p class="small text-muted mb-2">Start a local HL7 server to receive messages from medical devices.</p>
+                                <div class="mb-2">
+                                    <label>Listen Port</label>
+                                    <input type="number" class="form-control form-control-sm" id="listenerPort" value="2576">
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm btn-success flex-grow-1" id="listenerBtn" onclick="toggleListener()">
+                                        <i class="bi bi-play-fill me-1"></i>Start
+                                    </button>
+                                </div>
+                                <div id="listenerStatus" class="small mt-2 text-muted" style="display: none;">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="status-dot status-running"></div>
+                                        <span>Listening on port <strong id="listenerPortDisplay">2576</strong></span>
+                                    </div>
+                                    <div class="mt-1">Messages received: <strong id="listenerMsgCount">0</strong></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
                             <div class="card-header">Malformed Payloads</div>
-                            <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                            <div class="card-body" style="max-height: 300px; overflow-y: auto;">
                                 <div id="payloadLibrary"></div>
                             </div>
                         </div>
@@ -195,13 +245,19 @@
                             </div>
                             <div class="card-body">
                                 <textarea class="form-control fuzzer-editor" id="fuzzerConfig" rows="15"></textarea>
-                                <div class="mt-3">
-                                    <button class="btn btn-primary btn-action" onclick="startFuzzing()">
-                                        <i class="bi bi-play me-1"></i>Start Fuzzing
+                                <div class="mt-3 d-flex gap-2">
+                                    <button class="btn btn-success btn-action" id="fuzzerStartBtn" onclick="toggleFuzzing()">
+                                        <i class="bi bi-play-fill me-1"></i>Start Fuzzing
                                     </button>
                                     <button class="btn btn-outline-secondary btn-action" onclick="loadFuzzerTemplate()">
                                         Load Template
                                     </button>
+                                </div>
+                                <div id="fuzzerStatus" class="mt-2 small text-muted" style="display: none;">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                                        <span>Fuzzing in progress... <strong id="fuzzerProgress">0</strong>%</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -433,17 +489,28 @@
             }
         }
 
+        // Store payloads for reference by ID
+        let payloadLibrary = {};
+
         async function loadPayloadLibrary() {
             const response = await fetch('/api/client/payloads');
             const data = await response.json();
             const container = document.getElementById('payloadLibrary');
+            
+            // Store all payloads in memory for safe retrieval
+            for (const [category, info] of Object.entries(data.payloads)) {
+                for (const payload of info.payloads) {
+                    payloadLibrary[payload.id] = payload.message;
+                }
+            }
+            
             let html = '';
             for (const [category, info] of Object.entries(data.payloads)) {
-                html += `<div class="mb-3"><strong class="text-muted small">${info.name}</strong>`;
+                html += `<div class="mb-3"><strong class="text-muted small">${escapeHtml(info.name)}</strong>`;
                 for (const payload of info.payloads) {
-                    html += `<div class="payload-card" onclick="usePayload('${payload.id}', \`${payload.message.replace(/`/g, '\\`')}\`)">
-                        <div class="payload-name">${payload.name}</div>
-                        <div class="payload-desc">${payload.description}</div>
+                    html += `<div class="payload-card" onclick="usePayloadById('${payload.id}')">
+                        <div class="payload-name">${escapeHtml(payload.name)}</div>
+                        <div class="payload-desc">${escapeHtml(payload.description)}</div>
                     </div>`;
                 }
                 html += '</div>';
@@ -466,44 +533,310 @@
             });
         }
 
-        function usePayload(id, message) {
-            document.getElementById('messageEditor').value = message;
+        function usePayloadById(payloadId) {
+            const message = payloadLibrary[payloadId];
+            if (message) {
+                document.getElementById('messageEditor').value = message;
+            } else {
+                alert('Payload not found');
+            }
+        }
+
+        // Send mode handling
+        function updateSendModeUI() {
+            const mode = document.getElementById('sendMode').value;
+            const clientConfig = document.getElementById('clientModeConfig');
+            const serverConfig = document.getElementById('serverModeConfig');
+            const helpText = document.getElementById('sendModeHelp');
+            const sendBtn = document.querySelector('button[onclick="sendMessage()"]');
+            
+            if (mode === 'to_server') {
+                clientConfig.style.display = 'block';
+                serverConfig.style.display = 'none';
+                helpText.textContent = 'Connect to a target server and send payloads';
+                if (sendBtn) {
+                    sendBtn.innerHTML = '<i class="bi bi-send me-1"></i>Send Message';
+                }
+            } else {
+                clientConfig.style.display = 'none';
+                serverConfig.style.display = 'block';
+                helpText.textContent = 'Start a malicious server and send payloads to connecting clients';
+                if (sendBtn) {
+                    sendBtn.innerHTML = '<i class="bi bi-send me-1"></i>Queue Response';
+                }
+            }
+        }
+
+        // Malicious server state
+        let maliciousServerId = null;
+        let maliciousServerPollInterval = null;
+        let queuedMaliciousResponse = null;
+
+        async function toggleMaliciousServer() {
+            if (maliciousServerId) {
+                await stopMaliciousServer();
+            } else {
+                await startMaliciousServer();
+            }
+        }
+
+        async function startMaliciousServer() {
+            const btn = document.getElementById('maliciousServerBtn');
+            const port = document.getElementById('maliciousServerPort').value;
+            
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+            
+            try {
+                // Create a malicious server via the API
+                const response = await fetch(`/api/client/malicious-server/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        port: parseInt(port),
+                        use_tls: document.getElementById('clientTLS').checked
+                    })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    maliciousServerId = data.server_id;
+                    document.getElementById('maliciousServerPortDisplay').textContent = port;
+                    document.getElementById('maliciousServerStatus').style.display = 'block';
+                    btn.className = 'btn btn-sm btn-danger flex-grow-1';
+                    btn.innerHTML = '<i class="bi bi-stop-fill me-1"></i>Stop Server';
+                    
+                    // Start polling for client connections
+                    maliciousServerPollInterval = setInterval(pollMaliciousServer, 2000);
+                } else {
+                    alert('Failed to start server: ' + (data.detail || data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+            
+            btn.disabled = false;
+        }
+
+        async function stopMaliciousServer() {
+            const btn = document.getElementById('maliciousServerBtn');
+            
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+            
+            try {
+                await fetch(`/api/client/malicious-server/stop`, { method: 'POST' });
+            } catch (e) { console.error(e); }
+            
+            maliciousServerId = null;
+            queuedMaliciousResponse = null;
+            if (maliciousServerPollInterval) clearInterval(maliciousServerPollInterval);
+            
+            document.getElementById('maliciousServerStatus').style.display = 'none';
+            btn.className = 'btn btn-sm btn-success flex-grow-1';
+            btn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Start Server';
+            btn.disabled = false;
+        }
+
+        async function pollMaliciousServer() {
+            if (!maliciousServerId) return;
+            
+            try {
+                const response = await fetch(`/api/client/malicious-server/status`);
+                const data = await response.json();
+                
+                document.getElementById('maliciousClientCount').textContent = data.client_count || 0;
+                
+                // Log new events
+                if (data.events) {
+                    const log = document.getElementById('clientLog');
+                    for (const event of data.events) {
+                        if (event.type === 'client_connected') {
+                            addLogEntry(log, 'received', `Client connected: ${event.client}`);
+                        } else if (event.type === 'message_received') {
+                            addLogEntry(log, 'received', `Received from ${event.client}: ${(event.message || '').substring(0, 50)}...`);
+                        } else if (event.type === 'response_sent') {
+                            addLogEntry(log, 'sent', `Sent malicious response to ${event.client}`);
+                        }
+                    }
+                }
+            } catch (e) { console.error(e); }
         }
 
         async function sendMessage() {
             const message = document.getElementById('messageEditor').value;
             if (!message.trim()) return alert('Please enter a message');
 
+            const mode = document.getElementById('sendMode').value;
             const log = document.getElementById('clientLog');
-            addLogEntry(log, 'sent', message.substring(0, 100) + '...');
 
-            try {
-                const response = await fetch('/api/client/send', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        target_host: document.getElementById('clientHost').value,
-                        target_port: parseInt(document.getElementById('clientPort').value),
-                        use_tls: document.getElementById('clientTLS').checked,
-                        message: message
-                    })
-                });
-                const data = await response.json();
-                if (data.success) {
-                    addLogEntry(log, 'received', data.response || 'No response', data.response_time_ms + 'ms');
-                } else {
-                    addLogEntry(log, 'error', data.error || 'Failed to send message');
+            if (mode === 'to_server') {
+                // Client mode: send to target server
+                addLogEntry(log, 'sent', message.substring(0, 100) + '...');
+
+                try {
+                    const response = await fetch('/api/client/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            target_host: document.getElementById('clientHost').value,
+                            target_port: parseInt(document.getElementById('clientPort').value),
+                            use_tls: document.getElementById('clientTLS').checked,
+                            message: message
+                        })
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        addLogEntry(log, 'received', data.response || 'No response', data.response_time_ms + 'ms');
+                    } else {
+                        addLogEntry(log, 'error', data.error || 'Failed to send message');
+                    }
+                } catch (error) {
+                    addLogEntry(log, 'error', error.message);
                 }
-            } catch (error) {
-                addLogEntry(log, 'error', error.message);
+            } else {
+                // Server mode: queue response for next client
+                if (!maliciousServerId) {
+                    alert('Please start the malicious server first');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/api/client/malicious-server/queue-response', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: message })
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        addLogEntry(log, 'info', 'Response queued - will be sent to next connecting client');
+                    } else {
+                        addLogEntry(log, 'error', data.error || 'Failed to queue response');
+                    }
+                } catch (error) {
+                    addLogEntry(log, 'error', error.message);
+                }
             }
         }
 
         function addLogEntry(container, type, message, extra = '') {
             if (container.querySelector('.empty-state')) container.innerHTML = '';
             const time = new Date().toLocaleTimeString();
-            const typeClass = type === 'sent' ? 'log-sent' : (type === 'received' ? 'log-received' : 'log-error');
+            const typeClasses = {
+                'sent': 'log-sent',
+                'received': 'log-received',
+                'error': 'log-error',
+                'info': 'log-info'
+            };
+            const typeClass = typeClasses[type] || 'log-info';
             container.innerHTML = `<div class="log-entry"><span class="log-time">${time}</span><span class="log-type ${typeClass}">${type.toUpperCase()}</span>${message} ${extra ? `<span class="text-muted">(${extra})</span>` : ''}</div>` + container.innerHTML;
+        }
+
+        // Listener (Proxy) functionality
+        let listenerServerId = null;
+        let listenerPollInterval = null;
+
+        async function toggleListener() {
+            const btn = document.getElementById('listenerBtn');
+            const port = document.getElementById('listenerPort').value;
+            
+            if (listenerServerId) {
+                // Stop listener
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+                
+                try {
+                    await fetch(`/api/server/projects/${projectId}/servers/${listenerServerId}/stop`, { method: 'POST' });
+                    await fetch(`/api/server/projects/${projectId}/servers/${listenerServerId}`, { method: 'DELETE' });
+                } catch (e) { console.error(e); }
+                
+                listenerServerId = null;
+                if (listenerPollInterval) clearInterval(listenerPollInterval);
+                
+                document.getElementById('listenerStatus').style.display = 'none';
+                btn.className = 'btn btn-sm btn-success flex-grow-1';
+                btn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Start';
+                btn.disabled = false;
+            } else {
+                // Start listener
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+                
+                try {
+                    // Create server
+                    const createResp = await fetch(`/api/server/projects/${projectId}/servers`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: `Listener on ${port}`,
+                            host: '0.0.0.0',
+                            port: parseInt(port),
+                            use_tls: false
+                        })
+                    });
+                    const createData = await createResp.json();
+                    
+                    if (!createData.success) {
+                        throw new Error(createData.detail || 'Failed to create listener');
+                    }
+                    
+                    listenerServerId = createData.server.id;
+                    
+                    // Start server
+                    const startResp = await fetch(`/api/server/projects/${projectId}/servers/${listenerServerId}/start`, { method: 'POST' });
+                    const startData = await startResp.json();
+                    
+                    if (!startData.success) {
+                        throw new Error(startData.detail || 'Failed to start listener');
+                    }
+                    
+                    // Update UI
+                    document.getElementById('listenerPortDisplay').textContent = port;
+                    document.getElementById('listenerStatus').style.display = 'block';
+                    btn.className = 'btn btn-sm btn-danger flex-grow-1';
+                    btn.innerHTML = '<i class="bi bi-stop-fill me-1"></i>Stop';
+                    
+                    // Start polling for messages
+                    listenerPollInterval = setInterval(pollListenerMessages, 3000);
+                    
+                } catch (error) {
+                    alert('Error: ' + error.message);
+                    if (listenerServerId) {
+                        try {
+                            await fetch(`/api/server/projects/${projectId}/servers/${listenerServerId}`, { method: 'DELETE' });
+                        } catch (e) {}
+                        listenerServerId = null;
+                    }
+                }
+                
+                btn.disabled = false;
+            }
+        }
+
+        async function pollListenerMessages() {
+            if (!listenerServerId) return;
+            
+            try {
+                const response = await fetch(`/api/server/projects/${projectId}/servers/${listenerServerId}`);
+                const data = await response.json();
+                const server = data.server;
+                
+                document.getElementById('listenerMsgCount').textContent = server.live_messages || server.total_messages || 0;
+                
+                // Log new messages to the client log
+                if (server.message_log) {
+                    const log = document.getElementById('clientLog');
+                    for (const entry of server.message_log.slice(-5)) {
+                        if (entry.event_type === 'message_received') {
+                            addLogEntry(log, 'received', 
+                                `[Listener] ${entry.data.message_type || 'Message'} from ${entry.data.client || 'unknown'}`,
+                                entry.timestamp
+                            );
+                        }
+                    }
+                }
+            } catch (e) { console.error(e); }
         }
 
         async function loadFuzzerTemplate() {
@@ -512,49 +845,180 @@
             document.getElementById('fuzzerConfig').value = data.yaml;
         }
 
-        async function startFuzzing() {
-            const config = document.getElementById('fuzzerConfig').value;
-            const format = document.getElementById('configFormat').value;
-            try {
-                const response = await fetch(`/api/fuzzer/projects/${projectId}/jobs?name=Fuzz Job&config_format=${format}&config_content=${encodeURIComponent(config)}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-                });
-                const data = await response.json();
-                if (data.success) {
-                    pollFuzzingJob(data.job.id);
-                } else {
-                    alert('Failed to start fuzzing: ' + (data.detail || 'Unknown error'));
-                }
-            } catch (error) {
-                alert('Error: ' + error.message);
+        // Fuzzer state
+        let activeFuzzJobId = null;
+        let fuzzerPollInterval = null;
+
+        async function toggleFuzzing() {
+            if (activeFuzzJobId) {
+                await stopFuzzing();
+            } else {
+                await startFuzzing();
             }
         }
 
-        async function pollFuzzingJob(jobId) {
-            const interval = setInterval(async () => {
+        async function startFuzzing() {
+            let config = document.getElementById('fuzzerConfig').value;
+            const format = document.getElementById('configFormat').value;
+            
+            // Get target from client tab configuration
+            const targetHost = document.getElementById('clientHost').value || 'localhost';
+            const targetPort = document.getElementById('clientPort').value || '2575';
+            const useTLS = document.getElementById('clientTLS').checked;
+            
+            // Update target in config to match client tab settings
+            if (format === 'yaml') {
+                config = config.replace(/target_host:\s*["']?[^"'\n]+["']?/g, `target_host: "${targetHost}"`);
+                config = config.replace(/target_port:\s*\d+/g, `target_port: ${targetPort}`);
+                config = config.replace(/use_tls:\s*(true|false)/gi, `use_tls: ${useTLS}`);
+            } else {
                 try {
-                    const response = await fetch(`/api/fuzzer/projects/${projectId}/jobs/${jobId}`);
-                    const data = await response.json();
-                    const job = data.job;
-                    document.getElementById('fuzzTotal').textContent = job.live_total_requests || job.total_requests || 0;
-                    document.getElementById('fuzzSuccess').textContent = job.successful_requests || 0;
-                    document.getElementById('fuzzError').textContent = job.error_requests || 0;
-                    document.getElementById('fuzzFindings').textContent = job.interesting_findings || 0;
-                    
-                    if (job.findings && job.findings.length > 0) {
-                        let html = '';
-                        for (const finding of job.findings.slice(-10)) {
-                            html += `<div class="finding-card"><span class="finding-type">${finding.finding_type}</span> <strong>${finding.rule}</strong><br><small class="text-muted">${finding.mutation}</small></div>`;
-                        }
-                        document.getElementById('findingsList').innerHTML = html;
+                    const parsed = JSON.parse(config);
+                    parsed.target_host = targetHost;
+                    parsed.target_port = parseInt(targetPort);
+                    parsed.use_tls = useTLS;
+                    config = JSON.stringify(parsed, null, 2);
+                } catch (e) {
+                    // Keep original if parse fails
+                }
+            }
+            
+            const btn = document.getElementById('fuzzerStartBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Starting...';
+            
+            try {
+                const params = new URLSearchParams({
+                    name: `Fuzz Job - ${targetHost}:${targetPort}`,
+                    config_format: format,
+                    config_content: config
+                });
+                
+                const response = await fetch(`/api/fuzzer/projects/${projectId}/jobs?${params.toString()}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    activeFuzzJobId = data.job.id;
+                    updateFuzzerUI(true);
+                    startFuzzerPolling();
+                } else {
+                    alert('Failed to start fuzzing: ' + (data.detail || JSON.stringify(data)));
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Start Fuzzing';
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Start Fuzzing';
+            }
+        }
+
+        async function stopFuzzing() {
+            if (!activeFuzzJobId) return;
+            
+            const btn = document.getElementById('fuzzerStartBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Stopping...';
+            
+            try {
+                const response = await fetch(`/api/fuzzer/projects/${projectId}/jobs/${activeFuzzJobId}/stop`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    stopFuzzerPolling();
+                    activeFuzzJobId = null;
+                    updateFuzzerUI(false);
+                } else {
+                    alert('Failed to stop fuzzing: ' + (data.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function updateFuzzerUI(isRunning) {
+            const btn = document.getElementById('fuzzerStartBtn');
+            const status = document.getElementById('fuzzerStatus');
+            
+            if (isRunning) {
+                btn.className = 'btn btn-danger btn-action';
+                btn.innerHTML = '<i class="bi bi-stop-fill me-1"></i>Stop Fuzzing';
+                btn.disabled = false;
+                status.style.display = 'block';
+            } else {
+                btn.className = 'btn btn-success btn-action';
+                btn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Start Fuzzing';
+                btn.disabled = false;
+                status.style.display = 'none';
+            }
+        }
+
+        function startFuzzerPolling() {
+            if (fuzzerPollInterval) clearInterval(fuzzerPollInterval);
+            
+            pollFuzzingJob(); // Immediate first poll
+            fuzzerPollInterval = setInterval(pollFuzzingJob, 2000);
+        }
+
+        function stopFuzzerPolling() {
+            if (fuzzerPollInterval) {
+                clearInterval(fuzzerPollInterval);
+                fuzzerPollInterval = null;
+            }
+        }
+
+        async function pollFuzzingJob() {
+            if (!activeFuzzJobId) {
+                stopFuzzerPolling();
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/fuzzer/projects/${projectId}/jobs/${activeFuzzJobId}`);
+                const data = await response.json();
+                const job = data.job;
+                
+                // Update progress
+                const progress = job.live_progress || job.progress || 0;
+                document.getElementById('fuzzerProgress').textContent = progress;
+                
+                // Update stats with live or stored values
+                document.getElementById('fuzzTotal').textContent = job.live_total_requests || job.total_requests || 0;
+                document.getElementById('fuzzSuccess').textContent = job.live_successful || job.successful_requests || 0;
+                document.getElementById('fuzzError').textContent = job.live_errors || job.error_requests || 0;
+                document.getElementById('fuzzFindings').textContent = job.live_interesting || job.interesting_findings || 0;
+                
+                // Update findings list
+                const findings = job.findings || [];
+                if (findings.length > 0) {
+                    let html = '';
+                    for (const finding of findings.slice(-20)) {
+                        html += `<div class="finding-card">
+                            <span class="finding-type">${escapeHtml(finding.finding_type || 'unknown')}</span>
+                            <strong>${escapeHtml(finding.rule || 'Unknown rule')}</strong><br>
+                            <small class="text-muted">${escapeHtml(finding.mutation || '')}</small>
+                            ${finding.response_time_ms ? `<span class="ms-2 badge bg-secondary">${finding.response_time_ms}ms</span>` : ''}
+                        </div>`;
                     }
-                    
-                    if (job.status === 'completed' || job.status === 'error' || job.status === 'stopped') {
-                        clearInterval(interval);
-                    }
-                } catch (e) { clearInterval(interval); }
-            }, 2000);
+                    document.getElementById('findingsList').innerHTML = html;
+                }
+                
+                // Check if job is done
+                const status = job.live_status || job.status;
+                if (status === 'completed' || status === 'error' || status === 'stopped') {
+                    stopFuzzerPolling();
+                    activeFuzzJobId = null;
+                    updateFuzzerUI(false);
+                }
+            } catch (e) {
+                console.error('Poll error:', e);
+            }
         }
 
         async function uploadPcap() {
@@ -794,7 +1258,122 @@
                 const response = await fetch(`/api/server/projects/${projectId}/servers`);
                 const data = await response.json();
                 renderServerList(data.servers);
+                
+                // Check if any server is running and start polling logs
+                const hasRunning = data.servers && data.servers.some(s => 
+                    s.status === 'running' || s.live_status === 'running'
+                );
+                if (hasRunning && !serverLogPollInterval) {
+                    startServerLogPolling();
+                } else if (!hasRunning && serverLogPollInterval) {
+                    stopServerLogPolling();
+                }
             } catch (error) { console.error(error); }
+        }
+
+        // Store server data for toggle functionality
+        let serverData = {};
+        let serverLogPollInterval = null;
+        let lastLogCount = 0;
+
+        function startServerLogPolling() {
+            if (serverLogPollInterval) return;
+            pollServerLogs(); // Immediate first poll
+            serverLogPollInterval = setInterval(pollServerLogs, 2000);
+        }
+
+        function stopServerLogPolling() {
+            if (serverLogPollInterval) {
+                clearInterval(serverLogPollInterval);
+                serverLogPollInterval = null;
+            }
+        }
+
+        async function pollServerLogs() {
+            try {
+                // Find running servers
+                const response = await fetch(`/api/server/projects/${projectId}/servers`);
+                const data = await response.json();
+                
+                // Collect logs from all running servers
+                let allLogs = [];
+                for (const server of (data.servers || [])) {
+                    if (server.status === 'running' || server.live_status === 'running') {
+                        // Fetch detailed server info with logs
+                        const logResp = await fetch(`/api/server/projects/${projectId}/servers/${server.id}`);
+                        const logData = await logResp.json();
+                        const serverLogs = logData.server?.message_log || [];
+                        // Add server name to each log
+                        serverLogs.forEach(log => {
+                            log.server_name = server.name;
+                            allLogs.push(log);
+                        });
+                    }
+                }
+                
+                // Sort by timestamp and render
+                allLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                renderServerLogs(allLogs.slice(0, 50));
+                
+            } catch (error) { console.error('Log poll error:', error); }
+        }
+
+        function renderServerLogs(logs) {
+            const container = document.getElementById('serverLog');
+            if (!logs || logs.length === 0) {
+                container.innerHTML = '<div class="empty-state py-4"><i class="bi bi-inbox"></i><p>No messages received</p></div>';
+                return;
+            }
+            
+            let html = '';
+            for (const log of logs) {
+                const time = new Date(log.timestamp).toLocaleTimeString();
+                const eventType = log.event_type;
+                const data = log.data || {};
+                
+                let typeClass = 'log-info';
+                let icon = 'bi-info-circle';
+                let message = '';
+                
+                switch (eventType) {
+                    case 'connection':
+                        icon = data.action === 'connected' ? 'bi-plug' : 'bi-plug-fill';
+                        typeClass = data.action === 'connected' ? 'log-sent' : 'log-received';
+                        message = `${data.client || 'Unknown'} ${data.action}`;
+                        break;
+                    case 'message_received':
+                        icon = 'bi-envelope-arrow-down';
+                        typeClass = 'log-received';
+                        message = `<strong>${data.message_type || 'Message'}</strong> from ${data.client || 'unknown'}`;
+                        if (data.message_id) message += ` (ID: ${escapeHtml(data.message_id)})`;
+                        break;
+                    case 'message_sent':
+                        icon = 'bi-envelope-arrow-up';
+                        typeClass = 'log-sent';
+                        message = `<strong>${data.type || 'Response'}</strong> to ${data.client || 'unknown'}`;
+                        break;
+                    case 'server':
+                        icon = data.action === 'started' ? 'bi-play-circle' : 'bi-stop-circle';
+                        typeClass = 'log-info';
+                        message = `Server ${data.action}` + (data.port ? ` on port ${data.port}` : '');
+                        break;
+                    case 'error':
+                        icon = 'bi-exclamation-triangle';
+                        typeClass = 'log-error';
+                        message = data.error || 'Error occurred';
+                        break;
+                    default:
+                        message = JSON.stringify(data).substring(0, 100);
+                }
+                
+                html += `<div class="log-entry">
+                    <span class="log-time">${time}</span>
+                    <span class="log-type ${typeClass}"><i class="bi ${icon} me-1"></i>${eventType.toUpperCase()}</span>
+                    ${message}
+                    ${log.server_name ? `<span class="badge bg-secondary ms-2">${escapeHtml(log.server_name)}</span>` : ''}
+                </div>`;
+            }
+            container.innerHTML = html;
         }
 
         function renderServerList(servers) {
@@ -803,21 +1382,51 @@
                 container.innerHTML = '<div class="empty-state"><i class="bi bi-hdd-rack"></i><p>No servers configured</p></div>';
                 return;
             }
+            
+            // Update server data cache
+            servers.forEach(s => { serverData[s.id] = s; });
+            
             let html = '';
             for (const server of servers) {
-                const statusClass = server.status === 'running' ? 'status-running' : 'status-stopped';
-                html += `<div class="payload-card" onclick="selectServer('${server.id}')">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div class="payload-name">${server.name}</div>
-                        <div class="server-status"><div class="status-dot ${statusClass}"></div>${server.status}</div>
+                const isRunning = server.status === 'running' || server.live_status === 'running';
+                const statusClass = isRunning ? 'status-running' : 'status-stopped';
+                const statusText = isRunning ? 'Running' : 'Stopped';
+                const btnClass = isRunning ? 'btn-danger' : 'btn-success';
+                const btnIcon = isRunning ? 'bi-stop-fill' : 'bi-play-fill';
+                const btnText = isRunning ? 'Stop' : 'Start';
+                
+                html += `
+                    <div class="server-item mb-2 p-3" style="background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-bold">${escapeHtml(server.name)}</div>
+                                <div class="text-muted small">${escapeHtml(server.host)}:${server.port}</div>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="server-status">
+                                    <div class="status-dot ${statusClass}"></div>
+                                    <span class="small">${statusText}</span>
+                                </div>
+                                <button class="btn btn-sm ${btnClass}" onclick="toggleServer('${server.id}', ${isRunning})">
+                                    <i class="bi ${btnIcon} me-1"></i>${btnText}
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteServer('${server.id}')" title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        ${isRunning ? `<div class="mt-2 small text-muted"><i class="bi bi-activity me-1"></i>Connections: ${server.live_connections || server.total_connections || 0} | Messages: ${server.live_messages || server.total_messages || 0}</div>` : ''}
                     </div>
-                    <div class="payload-desc">${server.host}:${server.port}</div>
-                </div>`;
+                `;
             }
             container.innerHTML = html;
         }
 
         async function createServer() {
+            const btn = document.getElementById('serverActionBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creating...';
+            
             try {
                 const response = await fetch(`/api/server/projects/${projectId}/servers`, {
                     method: 'POST',
@@ -834,30 +1443,64 @@
                 const data = await response.json();
                 if (data.success) {
                     loadServers();
-                    alert('Server created! Click on it to start.');
+                    // Clear form
+                    document.getElementById('serverName').value = 'HL7 Mock Server';
+                    document.getElementById('serverPort').value = '2575';
+                } else {
+                    alert('Failed to create server: ' + (data.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-plus-circle me-1"></i>Create Server';
+            }
+        }
+
+        async function toggleServer(serverId, isRunning) {
+            const action = isRunning ? 'stop' : 'start';
+            
+            try {
+                const response = await fetch(`/api/server/projects/${projectId}/servers/${serverId}/${action}`, { 
+                    method: 'POST' 
+                });
+                const data = await response.json();
+                
+                if (!data.success && data.detail) {
+                    alert(`Failed to ${action} server: ${data.detail}`);
+                }
+                
+                // Reload server list after a brief delay to let status update
+                setTimeout(() => {
+                    loadServers();
+                    if (action === 'start') {
+                        startServerLogPolling();
+                    }
+                }, 500);
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function deleteServer(serverId) {
+            if (!confirm('Are you sure you want to delete this server?')) return;
+            
+            try {
+                const response = await fetch(`/api/server/projects/${projectId}/servers/${serverId}`, { 
+                    method: 'DELETE' 
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loadServers();
                 }
             } catch (error) {
                 alert('Error: ' + error.message);
             }
         }
 
-        async function selectServer(serverId) {
-            const action = confirm('Start this server?');
-            if (action) {
-                const response = await fetch(`/api/server/projects/${projectId}/servers/${serverId}/start`, { method: 'POST' });
-                const data = await response.json();
-                alert(data.success ? 'Server starting...' : 'Failed to start server');
-                loadServers();
-            }
-        }
-
         document.getElementById('serverTLS').addEventListener('change', (e) => {
             document.getElementById('tlsConfig').style.display = e.target.checked ? 'block' : 'none';
         });
-
-        async function exportPDF() {
-            window.open(`/api/export/projects/${projectId}/pdf`, '_blank');
-        }
 
         function escapeHtml(text) {
             if (!text) return '';
