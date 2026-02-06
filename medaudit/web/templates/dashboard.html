@@ -81,21 +81,11 @@
                     <div class="modal-body">
                         <div class="mb-3">
                             <label class="form-label">Project Name *</label>
-                            <input type="text" class="form-control" id="projectName" required>
+                            <input type="text" class="form-control" id="projectName" required placeholder="e.g., Hospital X Security Audit">
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Description</label>
-                            <textarea class="form-control" id="projectDesc" rows="3"></textarea>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Engagement Start</label>
-                                <input type="date" class="form-control" id="engagementStart">
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Engagement End</label>
-                                <input type="date" class="form-control" id="engagementEnd">
-                            </div>
+                            <textarea class="form-control" id="projectDesc" rows="3" placeholder="Optional notes about this project..."></textarea>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -152,7 +142,12 @@
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <h5 class="project-title">${escapeHtml(project.name)}</h5>
-                                    <span class="status-badge ${statusClass}">${project.status}</span>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="status-badge ${statusClass}">${project.status}</span>
+                                        <button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); deleteProject('${project.id}', '${escapeHtml(project.name)}')" title="Delete project">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <p class="project-desc">${escapeHtml(desc.substring(0, 100))}${desc.length > 100 ? '...' : ''}</p>
                                 <div class="project-meta">
@@ -192,15 +187,15 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         name: document.getElementById('projectName').value,
-                        description: document.getElementById('projectDesc').value || null,
-                        engagement_start: document.getElementById('engagementStart').value || null,
-                        engagement_end: document.getElementById('engagementEnd').value || null
+                        description: document.getElementById('projectDesc').value || null
                     })
                 });
                 const data = await response.json();
-                if (data.success) {
+                if (response.ok && data.success) {
                     bootstrap.Modal.getInstance(document.getElementById('newProjectModal')).hide();
                     openProject(data.project.id);
+                } else {
+                    alert(data.detail || 'Failed to create project');
                 }
             } catch (error) {
                 alert('Failed to create project: ' + error.message);
@@ -216,6 +211,27 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        async function deleteProject(projectId, projectName) {
+            const confirmed = confirm(`Are you sure you want to delete "${projectName}"?\n\nThis will permanently delete:\n- All PCAP analyses\n- All fuzzing jobs and results\n- All server configurations\n- All project files\n\nThis action cannot be undone.`);
+            
+            if (!confirmed) return;
+            
+            try {
+                const response = await fetch(`/api/projects/${projectId}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    loadProjects(); // Refresh the list
+                } else {
+                    alert('Failed to delete project: ' + (data.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error deleting project: ' + error.message);
+            }
         }
 
         checkAuth();

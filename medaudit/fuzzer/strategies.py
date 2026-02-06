@@ -229,11 +229,15 @@ class FuzzingStrategies:
             ("\t", ":", ";", "/", "+"),  # Alt set 2
             ("\x00", "\x01", "\x02", "\x03", "\x04"),  # Control chars
             ("|", "|", "|", "|", "|"),   # All same
-            ("", "^", "~", "\\", "&"),   # Empty field sep
+            ("\x1f", "^", "~", "\\", "&"),   # Unit separator instead of empty
             ("|" * 10, "^", "~", "\\", "&"),  # Long field sep
         ]
         
         for field_sep, comp_sep, rep_sep, esc_char, sub_sep in delimiter_sets:
+            # Skip empty separators to avoid ValueError
+            if not field_sep:
+                continue
+                
             # Replace delimiters in message
             mutated = message
             mutated = mutated.replace("|", field_sep)

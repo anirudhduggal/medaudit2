@@ -431,6 +431,18 @@ def run_fuzzing_job(
         
         # Extract config values
         base_message = config.get("base_message", "")
+        
+        # Normalize line endings: YAML uses \n, HL7 needs \r
+        if base_message:
+            base_message = base_message.strip()
+            base_message = base_message.replace("\r\n", "\r")  # Windows
+            base_message = base_message.replace("\n", "\r")     # Unix
+            # Replace template placeholders
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            msg_id = f"MSG{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+            base_message = base_message.replace("{timestamp}", timestamp)
+            base_message = base_message.replace("{msg_id}", msg_id)
+        
         rules = config.get("rules", [])
         delay_ms = config.get("delay_ms", 100)
         max_requests = config.get("max_requests", 1000)
