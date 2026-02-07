@@ -76,21 +76,36 @@ class ProxyLogger(BaseJsonLogger):
             "client_ip": client_ip
         })
 
-    def log_hl7_conversion(self, original_length: int, hl7_length: int, hl7_message_start: str):
-        """Log HTTP to HL7 conversion."""
-        self._log_json("hl7_conversion", {
+    def log_hl7_conversion(self, original_length: int, hl7_length: int, hl7_message_start: str, 
+                           full_message: str = None, full_response: str = None):
+        """Log HTTP to HL7 conversion with optional full message capture for AI analysis."""
+        log_data = {
             "original_length": original_length,
             "hl7_length": hl7_length,
             "hl7_message_preview": hl7_message_start
-        })
+        }
+        
+        # Add full message and response if provided (for AI analysis)
+        if full_message:
+            log_data["full_message"] = full_message
+        if full_response:
+            log_data["full_response"] = full_response
+            
+        self._log_json("hl7_conversion", log_data)
 
-    def log_hl7_response(self, status: str, response_length: int, hl7_ack: bytes):
-        """Log HL7 server response."""
-        self._log_json("hl7_response", {
+    def log_hl7_response(self, status: str, response_length: int, hl7_ack: bytes, full_response: str = None):
+        """Log HL7 server response with optional full response for AI analysis."""
+        log_data = {
             "status": status,
             "response_length": response_length,
             "ack_preview": hl7_ack.decode('utf-8', errors='ignore')[:100] if isinstance(hl7_ack, bytes) else str(hl7_ack)[:100]
-        })
+        }
+        
+        # Add full response if provided (for AI analysis)
+        if full_response:
+            log_data["full_response"] = full_response
+            
+        self._log_json("hl7_response", log_data)
 
     def log_error(self, message: str):
         """Log error event."""

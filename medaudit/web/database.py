@@ -362,6 +362,9 @@ class ServerInstance(Base):
     cert_path = Column(String(500), nullable=True)
     key_path = Column(String(500), nullable=True)
     
+    # Malicious server settings (JSON)
+    settings = Column(JSON, nullable=True)
+    
     # Status
     status = Column(String(20), default="stopped")  # stopped, running, error
     pid = Column(Integer, nullable=True)  # Process ID when running

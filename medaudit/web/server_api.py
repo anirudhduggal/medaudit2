@@ -120,6 +120,8 @@ class ServerCreate(BaseModel):
     use_tls: bool = False
     cert_path: Optional[str] = None
     key_path: Optional[str] = None
+    malicious_mode: Optional[str] = None
+    custom_ack: Optional[str] = None
 
 
 class ServerUpdate(BaseModel):
@@ -130,6 +132,8 @@ class ServerUpdate(BaseModel):
     use_tls: Optional[bool] = None
     cert_path: Optional[str] = None
     key_path: Optional[str] = None
+    malicious_mode: Optional[str] = None
+    custom_ack: Optional[str] = None
 
 
 class ManagedHL7Server:
@@ -227,7 +231,9 @@ class ManagedHL7Server:
     def _handle_client(self, client_socket, client_address):
         """Handle a single client connection."""
         client_id = f"{client_address[0]}:{client_address[1]}"
-        self.connections += 1
+        
+        with self._lock:
+            self.connections += 1
         
         self._log_event("connection", {
             "client": client_id,
@@ -265,13 +271,16 @@ class ManagedHL7Server:
                         if hl7_message.endswith('\x1c\r'):
                             hl7_message = hl7_message[:-2]
                         
-                        self.messages += 1
+                        # Increment message counter
+                        with self._lock:
+                            self.messages += 1
+                            current_msg_num = self.messages
                         
                         # Log received message
                         msg_info = self._parse_hl7_message(hl7_message)
                         self._log_event("message_received", {
                             "client": client_id,
-                            "message_number": self.messages,
+                            "message_number": current_msg_num,
                             **msg_info
                         })
                         
@@ -391,15 +400,41 @@ def run_server(server_id: str, config: dict, db_session_factory):
     global _active_servers
     
     try:
-        server = ManagedHL7Server(
-            server_id=server_id,
-            host=config.get("host", "0.0.0.0"),
-            port=config.get("port", 2575),
-            use_tls=config.get("use_tls", False),
-            cert_path=config.get("cert_path"),
-            key_path=config.get("key_path"),
-            db_session_factory=db_session_factory
-        )
+        malicious_mode = config.get("malicious_mode")
+        custom_ack = config.get("custom_ack")
+        
+        # Use malicious server if mode is specified
+        if malicious_mode and malicious_mode != "normal":
+            from medaudit.fuzzer.malicious_hl7_server import MaliciousHL7Server, AttackMode
+            
+            server = MaliciousHL7Server(
+                host=config.get("host", "0.0.0.0"),
+                port=config.get("port", 2575),
+                use_tls=config.get("use_tls", False),
+                cert_file=config.get("cert_path"),
+                key_file=config.get("key_path")
+            )
+            
+            # Set attack mode
+            try:
+                mode = AttackMode(malicious_mode)
+                attack_config = {}
+                if custom_ack:
+                    attack_config['custom_ack_pattern'] = custom_ack
+                server.set_attack_mode(mode, **attack_config)
+            except ValueError:
+                # Invalid mode, use normal
+                server.set_attack_mode(AttackMode.NORMAL)
+        else:
+            server = ManagedHL7Server(
+                server_id=server_id,
+                host=config.get("host", "0.0.0.0"),
+                port=config.get("port", 2575),
+                use_tls=config.get("use_tls", False),
+                cert_path=config.get("cert_path"),
+                key_path=config.get("key_path"),
+                db_session_factory=db_session_factory
+            )
         
         _active_servers[server_id] = {
             "server": server,
@@ -436,8 +471,20 @@ def run_server(server_id: str, config: dict, db_session_factory):
             pass
     
     finally:
-        if server_id in _active_servers:
+        # Server has stopped (either normally or due to error)
+        # Only update to stopped if it was running (not if it errored during startup)
+        if server_id in _active_servers and _active_servers[server_id].get("status") == "running":
             _active_servers[server_id]["status"] = "stopped"
+            # Update database
+            try:
+                db = db_session_factory()
+                db_server = db.query(ServerInstance).filter(ServerInstance.id == server_id).first()
+                if db_server:
+                    db_server.status = "stopped"
+                    db.commit()
+                db.close()
+            except:
+                pass
 
 
 @router.post("/projects/{project_id}/servers")
@@ -480,7 +527,11 @@ async def create_server(
         port=server_data.port,
         use_tls=server_data.use_tls,
         cert_path=validated_cert_path,  # Use validated path
-        key_path=validated_key_path      # Use validated path
+        key_path=validated_key_path,     # Use validated path
+        settings=json.dumps({
+            "malicious_mode": server_data.malicious_mode,
+            "custom_ack": server_data.custom_ack
+        }) if server_data.malicious_mode else None
     )
     
     db.add(server)
@@ -509,13 +560,42 @@ async def list_servers(
     for s in project.server_instances:
         server_dict = s.to_dict()
         
-        # Add live status
+        # Check if server is actually running in memory
         if s.id in _active_servers:
             live = _active_servers[s.id]
-            server_dict["live_status"] = live.get("status", "unknown")
+            live_status = live.get("status", "unknown")
+            server_dict["live_status"] = live_status
+            # Also update the main status to match live status
+            server_dict["status"] = live_status
             if "server" in live:
-                server_dict["live_connections"] = live["server"].connections
-                server_dict["live_messages"] = live["server"].messages
+                # Handle both ManagedHL7Server and MaliciousHL7Server
+                server_obj = live["server"]
+                
+                # Get connections count
+                if hasattr(server_obj, 'connections'):
+                    server_dict["live_connections"] = server_obj.connections
+                elif hasattr(server_obj, 'connection_logs'):
+                    server_dict["live_connections"] = len(server_obj.connection_logs)
+                else:
+                    server_dict["live_connections"] = 0
+                
+                # Get messages count
+                if hasattr(server_obj, 'messages'):
+                    server_dict["live_messages"] = server_obj.messages
+                elif hasattr(server_obj, 'message_count'):
+                    server_dict["live_messages"] = server_obj.message_count
+                else:
+                    server_dict["live_messages"] = 0
+                
+                # Get message log for UI display
+                if hasattr(server_obj, 'message_log') and isinstance(server_obj.message_log, list):
+                    server_dict["live_message_log"] = server_obj.message_log[-50:]
+        else:
+            # Server not in memory but database says running - sync the status
+            if s.status == "running":
+                s.status = "stopped"
+                db.commit()
+                server_dict["status"] = "stopped"
         
         servers.append(server_dict)
     
@@ -554,9 +634,26 @@ async def get_server(
         live = _active_servers[server_id]
         result["live_status"] = live.get("status", "unknown")
         if "server" in live:
-            result["live_connections"] = live["server"].connections
-            result["live_messages"] = live["server"].messages
-            result["message_log"] = live["server"].message_log[-100:]  # Last 100 events
+            # Handle both HL7MockServer and MaliciousHL7Server
+            server_obj = live["server"]
+            if hasattr(server_obj, 'connections'):
+                result["live_connections"] = server_obj.connections
+            elif hasattr(server_obj, 'connection_logs'):
+                result["live_connections"] = len(server_obj.connection_logs)
+            else:
+                result["live_connections"] = 0
+            
+            if hasattr(server_obj, 'messages'):
+                result["live_messages"] = server_obj.messages
+            elif hasattr(server_obj, 'message_count'):
+                result["live_messages"] = server_obj.message_count
+            else:
+                result["live_messages"] = 0
+            
+            if hasattr(server_obj, 'message_log'):
+                result["message_log"] = server_obj.message_log[-100:]  # Last 100 events
+            else:
+                result["message_log"] = []
     else:
         result["message_log"] = server.message_log[-100:] if server.message_log else []
     
@@ -664,12 +761,22 @@ async def start_server(
     from .database import get_db_manager
     db_manager = get_db_manager()
     
+    # Parse settings for malicious mode
+    settings = {}
+    if server.settings:
+        try:
+            settings = json.loads(server.settings)
+        except:
+            pass
+    
     config = {
         "host": server.host,
         "port": server.port,
         "use_tls": server.use_tls,
         "cert_path": server.cert_path,
-        "key_path": server.key_path
+        "key_path": server.key_path,
+        "malicious_mode": settings.get("malicious_mode"),
+        "custom_ack": settings.get("custom_ack")
     }
     
     thread = threading.Thread(

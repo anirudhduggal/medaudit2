@@ -20,6 +20,7 @@ from .client_api import router as client_router
 from .fuzzer_api import router as fuzzer_router
 from .traffic_api import router as traffic_router
 from .server_api import router as server_router
+from .proxy_api import router as proxy_router
 from .ai_api import router as ai_router
 from .database import get_db_manager, get_db
 
@@ -109,6 +110,7 @@ app.include_router(client_router)
 app.include_router(fuzzer_router)
 app.include_router(traffic_router)
 app.include_router(server_router)
+app.include_router(proxy_router)
 app.include_router(ai_router)
 
 

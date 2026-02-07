@@ -151,24 +151,32 @@
                             </div>
                         </div>
                         <div class="card">
-                            <div class="card-header"><i class="bi bi-broadcast me-2"></i>HL7 Listener (Proxy)</div>
+                            <div class="card-header"><i class="bi bi-arrow-left-right me-2"></i>HTTP → MLLP Converter</div>
                             <div class="card-body config-form">
-                                <p class="small text-muted mb-2">Start a local HL7 server to receive messages from medical devices.</p>
-                                <div class="mb-2">
-                                    <label>Listen Port</label>
-                                    <input type="number" class="form-control form-control-sm" id="listenerPort" value="2576">
+                                <p class="small text-muted mb-2">Starts an HTTP server that receives messages and forwards them as MLLP to the target HL7 server.</p>
+                                <div class="row mb-2">
+                                    <div class="col-6">
+                                        <label class="small">HTTP Server Port</label>
+                                        <input type="number" class="form-control form-control-sm" id="proxyPort" value="3000">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="small">Target HL7 Port</label>
+                                        <input type="number" class="form-control form-control-sm" id="proxyTargetPort" value="2575">
+                                    </div>
                                 </div>
                                 <div class="d-flex gap-2">
-                                    <button class="btn btn-sm btn-success flex-grow-1" id="listenerBtn" onclick="toggleListener()">
-                                        <i class="bi bi-play-fill me-1"></i>Start
+                                    <button class="btn btn-sm btn-success flex-grow-1" id="proxyBtn" onclick="toggleProxy()">
+                                        <i class="bi bi-play-fill me-1"></i>Start Server
                                     </button>
                                 </div>
-                                <div id="listenerStatus" class="small mt-2 text-muted" style="display: none;">
+                                <div id="proxyStatus" class="small mt-2 text-muted" style="display: none;">
                                     <div class="d-flex align-items-center gap-2">
                                         <div class="status-dot status-running"></div>
-                                        <span>Listening on port <strong id="listenerPortDisplay">2576</strong></span>
+                                        <span>Listening on <strong>http://localhost:<span id="proxyPortDisplay">3000</span></strong></span>
                                     </div>
-                                    <div class="mt-1">Messages received: <strong id="listenerMsgCount">0</strong></div>
+                                    <div class="mt-1">
+                                        Send HTTP POST to localhost:<span id="proxyPortConfig">3000</span> → converts to MLLP
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -380,9 +388,8 @@
                 <div class="row">
                     <div class="col-lg-4">
                         <div class="card">
-                            <div class="card-header d-flex justify-content-between">
+                            <div class="card-header">
                                 Servers
-                                <button class="btn btn-sm btn-primary" onclick="showNewServerModal()"><i class="bi bi-plus"></i></button>
                             </div>
                             <div class="card-body" id="serverList">
                                 <div class="empty-state"><i class="bi bi-hdd-rack"></i><p>No servers configured</p></div>
@@ -409,7 +416,7 @@
                                 </div>
                                 <div class="form-check mb-3">
                                     <input type="checkbox" class="form-check-input" id="serverTLS">
-                                    <label class="form-check-label">Enable TLS</label>
+                                    <label class="form-check-label" for="serverTLS">Enable TLS</label>
                                 </div>
                                 <div id="tlsConfig" style="display: none;">
                                     <div class="row">
@@ -423,8 +430,37 @@
                                         </div>
                                     </div>
                                 </div>
+                                <div class="form-check mb-3">
+                                    <input type="checkbox" class="form-check-input" id="serverMalicious" onchange="toggleMaliciousConfig()">
+                                    <label class="form-check-label" for="serverMalicious">
+                                        <i class="bi bi-exclamation-triangle text-warning me-1"></i>Malicious Server Mode (Testing)
+                                    </label>
+                                </div>
+                                <div id="maliciousConfig" style="display: none;">
+                                    <div class="mb-3">
+                                        <label>Attack Mode</label>
+                                        <select class="form-control form-control-sm" id="maliciousMode">
+                                            <option value="normal">Normal ACK</option>
+                                            <option value="no_ack">No ACK Response</option>
+                                            <option value="broken_ack">Malformed ACK</option>
+                                            <option value="flood_ack">Flood ACK Messages</option>
+                                            <option value="delayed_ack">Delayed ACK (30s)</option>
+                                            <option value="overflow_ack">Buffer Overflow Attempt</option>
+                                            <option value="injection_ack">Injection Payloads in ACK</option>
+                                            <option value="random">Random Attack per Connection</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label>Custom ACK Pattern <small class="text-muted">(optional, overrides attack mode)</small></label>
+                                        <textarea class="form-control form-control-sm" id="customAckPattern" rows="3" placeholder="MSH|^~\&|TEST|LAB|...&#10;MSA|AA|MSG001"></textarea>
+                                        <small class="text-muted">Use {timestamp} and {message_id} as placeholders</small>
+                                    </div>
+                                    <div class="alert alert-warning alert-sm py-2 mb-2">
+                                        <small><i class="bi bi-shield-exclamation"></i> For security testing only. Use against test devices.</small>
+                                    </div>
+                                </div>
                                 <button class="btn btn-primary btn-action" id="serverActionBtn" onclick="createServer()">
-                                    <i class="bi bi-plus-circle me-1"></i>Create Server
+                                    Create Server
                                 </button>
                             </div>
                         </div>
@@ -559,13 +595,91 @@
                 project = data.project;
                 document.getElementById('projectName').textContent = project.name;
                 document.getElementById('projectMeta').textContent = project.description || 'Security audit project';
+                
+                // Reset UI state after loading project data
+                resetUIState();
+                
                 loadPayloadLibrary();
                 loadTemplates();
                 loadServers();
                 loadFuzzerTemplate();
+                checkProxyStatus();  // Check if proxy is already running
             } catch (error) {
+                console.error('Load project error:', error);
                 alert('Failed to load project');
                 window.location.href = '/dashboard';
+            }
+        }
+
+        function resetUIState() {
+            try {
+                // Clear server state
+                const serverList = document.getElementById('serverList');
+                if (serverList) serverList.innerHTML = '<div class="empty-state"><i class="bi bi-hdd-rack"></i><p>No servers configured</p></div>';
+                
+                const serverLog = document.getElementById('serverLog');
+                if (serverLog) serverLog.innerHTML = '<div class="empty-state py-4"><i class="bi bi-inbox"></i><p>No messages received</p></div>';
+                
+                const serverName = document.getElementById('serverName');
+                if (serverName) serverName.value = 'HL7 Mock Server';
+                
+                const serverHost = document.getElementById('serverHost');
+                if (serverHost) serverHost.value = '0.0.0.0';
+                
+                const serverPort = document.getElementById('serverPort');
+                if (serverPort) serverPort.value = '2575';
+                
+                const serverTLS = document.getElementById('serverTLS');
+                if (serverTLS) serverTLS.checked = false;
+                
+                const serverMalicious = document.getElementById('serverMalicious');
+                if (serverMalicious) serverMalicious.checked = false;
+                
+                const tlsConfig = document.getElementById('tlsConfig');
+                if (tlsConfig) tlsConfig.style.display = 'none';
+                
+                const maliciousConfig = document.getElementById('maliciousConfig');
+                if (maliciousConfig) maliciousConfig.style.display = 'none';
+                
+                const maliciousMode = document.getElementById('maliciousMode');
+                if (maliciousMode) maliciousMode.value = 'normal';
+                
+                const customAckPattern = document.getElementById('customAckPattern');
+                if (customAckPattern) customAckPattern.value = '';
+                
+                // Clear client state
+                const clientHost = document.getElementById('clientHost');
+                if (clientHost) clientHost.value = 'localhost';
+                
+                const clientPort = document.getElementById('clientPort');
+                if (clientPort) clientPort.value = '2575';
+                
+                const clientTLS = document.getElementById('clientTLS');
+                if (clientTLS) clientTLS.checked = false;
+                
+                const messageEditor = document.getElementById('messageEditor');
+                if (messageEditor) messageEditor.value = '';
+                
+                const clientResponse = document.getElementById('clientResponse');
+                if (clientResponse) clientResponse.innerHTML = '<div class="empty-state py-4"><i class="bi bi-inbox"></i><p>No response yet</p></div>';
+                
+                // Clear proxy state
+                const proxyPort = document.getElementById('proxyPort');
+                if (proxyPort) proxyPort.value = '3000';
+                
+                const proxyTarget = document.getElementById('proxyTarget');
+                if (proxyTarget) proxyTarget.value = 'localhost:2575';
+                
+                const proxyStatus = document.getElementById('proxyStatus');
+                if (proxyStatus) proxyStatus.style.display = 'none';
+                
+                // Stop any polling
+                if (serverLogPollInterval) {
+                    clearInterval(serverLogPollInterval);
+                    serverLogPollInterval = null;
+                }
+            } catch (error) {
+                console.error('Reset UI state error:', error);
             }
         }
 
@@ -666,110 +780,121 @@
             container.innerHTML = `<div class="log-entry"><span class="log-time">${time}</span><span class="log-type ${typeClass}">${type.toUpperCase()}</span>${message} ${extra ? `<span class="text-muted">(${extra})</span>` : ''}</div>` + container.innerHTML;
         }
 
-        // Listener (Proxy) functionality
-        let listenerServerId = null;
-        let listenerPollInterval = null;
+        // HTTP → MLLP Converter functionality
+        let proxyProcess = null;
 
-        async function toggleListener() {
-            const btn = document.getElementById('listenerBtn');
-            const port = document.getElementById('listenerPort').value;
+        async function checkProxyStatus() {
+            const proxyPort = parseInt(document.getElementById('proxyPort').value);
+            try {
+                const response = await fetch(`/api/proxy/status?proxy_port=${proxyPort}`);
+                const data = await response.json();
+                
+                if (data.success && data.proxy && data.proxy.status === 'running') {
+                    // Proxy is running - update UI
+                    proxyProcess = { port: data.proxy.port, pid: data.proxy.pid };
+                    
+                    const btn = document.getElementById('proxyBtn');
+                    btn.className = 'btn btn-sm btn-danger flex-grow-1';
+                    btn.innerHTML = '<i class="bi bi-stop-fill me-1"></i>Stop Server';
+                    
+                    const proxyPortDisplayEl = document.getElementById('proxyPortDisplay');
+                    const proxyPortConfigEl = document.getElementById('proxyPortConfig');
+                    const proxyStatusEl = document.getElementById('proxyStatus');
+                    
+                    if (proxyPortDisplayEl) proxyPortDisplayEl.textContent = data.proxy.port;
+                    if (proxyPortConfigEl) proxyPortConfigEl.textContent = data.proxy.port;
+                    if (proxyStatusEl) proxyStatusEl.style.display = 'block';
+                }
+            } catch (error) {
+                console.log('Could not check proxy status:', error);
+            }
+        }
+
+        async function toggleProxy() {
+            const btn = document.getElementById('proxyBtn');
+            const proxyPort = parseInt(document.getElementById('proxyPort').value);
+            const targetPort = parseInt(document.getElementById('proxyTargetPort').value);
             
-            if (listenerServerId) {
-                // Stop listener
+            if (proxyProcess) {
+                // Stop converter
                 btn.disabled = true;
                 btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
                 
                 try {
-                    await fetch(`/api/server/projects/${projectId}/servers/${listenerServerId}/stop`, { method: 'POST' });
-                    await fetch(`/api/server/projects/${projectId}/servers/${listenerServerId}`, { method: 'DELETE' });
-                } catch (e) { console.error(e); }
+                    const response = await fetch('/api/proxy/stop', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ proxy_port: proxyPort })
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        proxyProcess = null;
+                        document.getElementById('proxyStatus').style.display = 'none';
+                        btn.className = 'btn btn-sm btn-success flex-grow-1';
+                        btn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Start Server';
+                        addLogEntry(document.getElementById('clientLog'), 'info', 'HTTP→MLLP converter stopped', '');
+                    } else {
+                        throw new Error(data.detail || 'Failed to stop converter');
+                    }
+                } catch (error) {
+                    alert('Error stopping converter: ' + error.message);
+                }
                 
-                listenerServerId = null;
-                if (listenerPollInterval) clearInterval(listenerPollInterval);
-                
-                document.getElementById('listenerStatus').style.display = 'none';
-                btn.className = 'btn btn-sm btn-success flex-grow-1';
-                btn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Start';
                 btn.disabled = false;
             } else {
-                // Start listener
+                // Start converter
                 btn.disabled = true;
                 btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
                 
                 try {
-                    // Create server
-                    const createResp = await fetch(`/api/server/projects/${projectId}/servers`, {
+                    const response = await fetch('/api/proxy/start', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            name: `Listener on ${port}`,
-                            host: '0.0.0.0',
-                            port: parseInt(port),
-                            use_tls: false
+                            proxy_port: proxyPort,
+                            hl7_host: 'localhost',
+                            hl7_port: targetPort
                         })
                     });
-                    const createData = await createResp.json();
                     
-                    if (!createData.success) {
-                        throw new Error(createData.detail || 'Failed to create listener');
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`HTTP ${response.status}: ${errorText}`);
                     }
                     
-                    listenerServerId = createData.server.id;
+                    const data = await response.json();
                     
-                    // Start server
-                    const startResp = await fetch(`/api/server/projects/${projectId}/servers/${listenerServerId}/start`, { method: 'POST' });
-                    const startData = await startResp.json();
-                    
-                    if (!startData.success) {
-                        throw new Error(startData.detail || 'Failed to start listener');
+                    if (data.success) {
+                        const proxyPortDisplayEl = document.getElementById('proxyPortDisplay');
+                        const proxyPortConfigEl = document.getElementById('proxyPortConfig');
+                        const proxyStatusEl = document.getElementById('proxyStatus');
+                        
+                        if (proxyPortDisplayEl) proxyPortDisplayEl.textContent = proxyPort;
+                        if (proxyPortConfigEl) proxyPortConfigEl.textContent = proxyPort;
+                        if (proxyStatusEl) proxyStatusEl.style.display = 'block';
+                        
+                        proxyProcess = { port: proxyPort, targetPort: targetPort, pid: data.proxy?.pid };
+                        
+                        btn.className = 'btn btn-sm btn-danger flex-grow-1';
+                        btn.innerHTML = '<i class="bi bi-stop-fill me-1"></i>Stop Server';
+                        
+                        addLogEntry(document.getElementById('clientLog'), 'info', 
+                            `HTTP→MLLP converter listening on port ${proxyPort}, forwarding to HL7 port ${targetPort}`,
+                            ''
+                        );
+                    } else {
+                        throw new Error(data.detail || 'Failed to start converter');
                     }
-                    
-                    // Update UI
-                    document.getElementById('listenerPortDisplay').textContent = port;
-                    document.getElementById('listenerStatus').style.display = 'block';
-                    btn.className = 'btn btn-sm btn-danger flex-grow-1';
-                    btn.innerHTML = '<i class="bi bi-stop-fill me-1"></i>Stop';
-                    
-                    // Start polling for messages
-                    listenerPollInterval = setInterval(pollListenerMessages, 3000);
                     
                 } catch (error) {
-                    alert('Error: ' + error.message);
-                    if (listenerServerId) {
-                        try {
-                            await fetch(`/api/server/projects/${projectId}/servers/${listenerServerId}`, { method: 'DELETE' });
-                        } catch (e) {}
-                        listenerServerId = null;
-                    }
+                    console.error('Proxy start error:', error);
+                    alert('Error starting converter: ' + (error.message || JSON.stringify(error)));
+                    proxyProcess = null;
                 }
                 
                 btn.disabled = false;
             }
-        }
-
-        async function pollListenerMessages() {
-            if (!listenerServerId) return;
-            
-            try {
-                const response = await fetch(`/api/server/projects/${projectId}/servers/${listenerServerId}`);
-                const data = await response.json();
-                const server = data.server;
-                
-                document.getElementById('listenerMsgCount').textContent = server.live_messages || server.total_messages || 0;
-                
-                // Log new messages to the client log
-                if (server.message_log) {
-                    const log = document.getElementById('clientLog');
-                    for (const entry of server.message_log.slice(-5)) {
-                        if (entry.event_type === 'message_received') {
-                            addLogEntry(log, 'received', 
-                                `[Listener] ${entry.data.message_type || 'Message'} from ${entry.data.client || 'unknown'}`,
-                                entry.timestamp
-                            );
-                        }
-                    }
-                }
-            } catch (e) { console.error(e); }
         }
 
         async function loadFuzzerTemplate() {
@@ -1228,21 +1353,35 @@
                 const response = await fetch(`/api/server/projects/${projectId}/servers`);
                 const data = await response.json();
                 
-                // Collect logs from all running servers
+                // Collect logs from all running servers (check live_status first, then status)
                 let allLogs = [];
                 for (const server of (data.servers || [])) {
-                    if (server.status === 'running' || server.live_status === 'running') {
+                    const isLiveRunning = server.live_status === 'running';
+                    const isDbRunning = server.status === 'running';
+                    
+                    if (isLiveRunning || isDbRunning) {
                         // Fetch detailed server info with logs
                         const logResp = await fetch(`/api/server/projects/${projectId}/servers/${server.id}`);
                         const logData = await logResp.json();
                         const serverLogs = logData.server?.message_log || [];
+                        
+                        // Also check live_message_log from list response (already fetched)
+                        const liveLogsFromList = server.live_message_log || [];
+                        
+                        // Merge both sources, preferring the detailed fetch
+                        const logsToUse = serverLogs.length > 0 ? serverLogs : liveLogsFromList;
+                        
+                        console.log(`Server ${server.name}: ${logsToUse.length} logs (live: ${isLiveRunning}, db: ${isDbRunning}), ${logData.server?.live_connections || 0} connections, ${logData.server?.live_messages || 0} messages`);
+                        
                         // Add server name to each log
-                        serverLogs.forEach(log => {
+                        logsToUse.forEach(log => {
                             log.server_name = server.name;
                             allLogs.push(log);
                         });
                     }
                 }
+                
+                console.log(`Total logs to render: ${allLogs.length}`);
                 
                 // Sort by timestamp and render
                 allLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
@@ -1253,6 +1392,8 @@
 
         function renderServerLogs(logs) {
             const container = document.getElementById('serverLog');
+            console.log('renderServerLogs called with', logs ? logs.length : 0, 'logs');
+            
             if (!logs || logs.length === 0) {
                 container.innerHTML = '<div class="empty-state py-4"><i class="bi bi-inbox"></i><p>No messages received</p></div>';
                 return;
@@ -1260,9 +1401,10 @@
             
             let html = '';
             for (const log of logs) {
+                console.log('Processing log:', log);
                 const time = new Date(log.timestamp).toLocaleTimeString();
                 const eventType = log.event_type;
-                const data = log.data || {};
+                const data = log.data || log || {}; // Handle both wrapped and unwrapped formats
                 
                 let typeClass = 'log-info';
                 let icon = 'bi-info-circle';
@@ -1277,8 +1419,11 @@
                     case 'message_received':
                         icon = 'bi-envelope-arrow-down';
                         typeClass = 'log-received';
-                        message = `<strong>${data.message_type || 'Message'}</strong> from ${data.client || 'unknown'}`;
-                        if (data.message_id) message += ` (ID: ${escapeHtml(data.message_id)})`;
+                        const msgType = data.message_type || 'Message';
+                        const msgPreview = data.message_preview ? data.message_preview.substring(0, 50) : '';
+                        message = `<strong>${msgType}</strong> from ${data.client || 'unknown'}`;
+                        if (data.message_id) message += ` <span class="text-muted">(${escapeHtml(data.message_id)})</span>`;
+                        if (msgPreview) message += `<br><span class="text-muted small">${escapeHtml(msgPreview)}...</span>`;
                         break;
                     case 'message_sent':
                         icon = 'bi-envelope-arrow-up';
@@ -1355,38 +1500,62 @@
             container.innerHTML = html;
         }
 
+        function toggleMaliciousConfig() {
+            const checked = document.getElementById('serverMalicious').checked;
+            document.getElementById('maliciousConfig').style.display = checked ? 'block' : 'none';
+        }
+
         async function createServer() {
             const btn = document.getElementById('serverActionBtn');
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creating...';
             
+            const isMalicious = document.getElementById('serverMalicious').checked;
+            const serverConfig = {
+                name: document.getElementById('serverName').value,
+                host: document.getElementById('serverHost').value,
+                port: parseInt(document.getElementById('serverPort').value),
+                use_tls: document.getElementById('serverTLS').checked,
+                cert_path: document.getElementById('certPath').value || null,
+                key_path: document.getElementById('keyPath').value || null
+            };
+            
+            if (isMalicious) {
+                serverConfig.malicious_mode = document.getElementById('maliciousMode').value;
+                serverConfig.custom_ack = document.getElementById('customAckPattern').value || null;
+            }
+            
             try {
                 const response = await fetch(`/api/server/projects/${projectId}/servers`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        name: document.getElementById('serverName').value,
-                        host: document.getElementById('serverHost').value,
-                        port: parseInt(document.getElementById('serverPort').value),
-                        use_tls: document.getElementById('serverTLS').checked,
-                        cert_path: document.getElementById('certPath').value || null,
-                        key_path: document.getElementById('keyPath').value || null
-                    })
+                    body: JSON.stringify(serverConfig)
                 });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Server creation failed:', errorText);
+                    throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 200)}`);
+                }
+                
                 const data = await response.json();
                 if (data.success) {
                     loadServers();
                     // Clear form
                     document.getElementById('serverName').value = 'HL7 Mock Server';
                     document.getElementById('serverPort').value = '2575';
+                    document.getElementById('serverMalicious').checked = false;
+                    document.getElementById('customAckPattern').value = '';
+                    toggleMaliciousConfig();
                 } else {
                     alert('Failed to create server: ' + (data.detail || 'Unknown error'));
                 }
             } catch (error) {
+                console.error('Create server error:', error);
                 alert('Error: ' + error.message);
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '<i class="bi bi-plus-circle me-1"></i>Create Server';
+                btn.innerHTML = 'Create Server';
             }
         }
 
@@ -1769,6 +1938,12 @@
 
         // Initialize
         loadProject();
+        
+        // Poll server logs when Server tab is shown
+        document.querySelector('button[data-bs-target="#serverTab"]').addEventListener('click', () => {
+            loadServers();
+            pollServerLogs();
+        });
         
         // Check AI config when tab is shown
         document.querySelector('button[data-bs-target="#aiTab"]').addEventListener('click', () => {
