@@ -2,11 +2,33 @@
 
 Medical device security analyzer for HL7/FHIR traffic. Detects encryption status, extracts HL7 v2.x messages, identifies PII exposure using Presidio NLP + regex patterns. Features a full-stack web UI with authentication, project management, HL7 client/fuzzer, traffic analysis with visualization, and PDF/JSON export.
 
+## Current Status (February 7, 2026)
+
+### Recently Fixed Issues
+1. **Server Message Log Display** - Fixed UI polling to properly display received HL7 messages in real-time
+   - Removed verbose debug logging that was cluttering message log
+   - Added tab-click handler to poll logs immediately when Server tab is shown
+   - Fixed status synchronization between database and in-memory server state
+   
+2. **Proxy State Management** - Fixed HTTP→MLLP proxy state tracking across page refreshes
+   - Added socket-based port checking to verify actual running status
+   - Added `checkProxyStatus()` function called on page load
+   - Proxy state now persists correctly when page is refreshed
+
+3. **Server Status Display** - Fixed display showing "Stopped" when server was actually running
+   - Now correctly syncs `live_status` to main `status` field in API response
+   - Prevents stale database status from overriding in-memory running state
+
+### Known Limitations & TODO
+- Proxy error handling needs improvement for concurrent port checks
+- Server status should be persisted to disk for recovery after web server restart
+- Consider adding WebSocket for real-time log updates instead of polling
+
 ## Architecture Overview
 ```
 medaudit/
 ├── __main__.py                        # CLI dispatcher (analyze|web|proxy|config|fuzzer|user)
-├── utils/                             # ★ Utilities and helpers
+├── utils/                             # Utilities and helpers
 │   └── paths.py                       # Centralized path management (data, config, logs)
 ├── analysis/
 │   ├── traffic/traffic_analysis.py   # PCAP parsing, encryption heuristics, HL7 extraction
@@ -17,7 +39,7 @@ medaudit/
 │   ├── hl7_client.py                 # HL7 client for sending messages
 │   ├── message_logger.py             # JSON Lines message logging
 │   └── cli.py                        # HL7 server CLI interface
-├── fuzzer/                           # ★ Dedicated Medical Device Fuzzer Module
+├── fuzzer/                           # Dedicated Medical Device Fuzzer Module
 │   ├── __init__.py                   # Module exports
 │   ├── __main__.py                   # CLI entry point (python -m medaudit.fuzzer)
 │   ├── cli.py                        # Fuzzer CLI commands (run, test, template, validate, server, attacks)
@@ -25,31 +47,36 @@ medaudit/
 │   ├── engine.py                     # Fuzzing execution engine + message generation
 │   ├── protocol.py                   # HL7/MLLP protocol handling
 │   ├── templates.py                  # Default fuzzing config templates (YAML/JSON)
-│   └── malicious_hl7_server.py       # ★ Malicious HL7 server (17 attack modes)
-├── config/                           # ★ Package configuration (inside medaudit)
+│   └── malicious_hl7_server.py       # Malicious HL7 server (17 attack modes)
+├── config/                           # Package configuration (inside medaudit)
 │   ├── medaudit.json                 # Main configuration file
-│   └── hl7server.json                # HL7 server configuration
-├── data/                             # ★ Runtime data (inside medaudit)
+│   ├── hl7server.json                # HL7 server configuration
+│   ├── logging.py                    # Custom logging handlers
+│   └── __init__.py                   # Configuration loading
+├── data/                             # Runtime data (inside medaudit)
 │   ├── medaudit.db                   # SQLite database
-│   └── artifacts/                    # Project artifacts (PCAPs, etc.)
-├── logs/                             # ★ Runtime logs (inside medaudit)
+│   └── artifacts/                    # Project artifacts (PCAPs, exports)
+├── logs/                             # Runtime logs (inside medaudit)
+│   └── YYYY-MM-DD/                   # Date-organized JSON Lines logs
 ├── web/
-    ├── app.py                        # FastAPI main app + page routes
-    ├── auth.py                       # User authentication + registration + session management
-    ├── database.py                   # SQLAlchemy models (User, Project, Analysis, etc.)
-    ├── projects.py                   # Project CRUD API (/api/projects)
-    ├── client_api.py                 # HL7 Client API + malformed payload library
-    ├── fuzzer_api.py                 # HL7 Fuzzer Web API (imports from fuzzer module)
-    ├── traffic_api.py                # PCAP upload + analysis + visualization
-    ├── server_api.py                 # Managed HL7 server instances
-    ├── ai_api.py                     # ★ AI Analysis API (OpenAI, Anthropic, local models)
-    ├── export_api.py                 # PDF/JSON report generation
-    ├── analyzer.py                   # Enhanced PCAP analyzer for web UI
-    └── templates/                    # Jinja2 HTML templates
-        ├── index.html                # Landing page
-        ├── login.html                # ★ Login/Register page (tabbed interface)
-        ├── dashboard.html            # Project listing + management
-        └── project.html              # Project detail (Client/Fuzzer/Traffic/Server/AI tabs)
+│   ├── app.py                        # FastAPI main app + page routes
+│   ├── auth.py                       # User authentication + registration + session management
+│   ├── database.py                   # SQLAlchemy models (User, Project, Analysis, etc.)
+│   ├── projects.py                   # Project CRUD API (/api/projects)
+│   ├── client_api.py                 # HL7 Client API + malformed payload library
+│   ├── fuzzer_api.py                 # HL7 Fuzzer Web API (imports from fuzzer module)
+│   ├── traffic_api.py                # PCAP upload + analysis + visualization
+│   ├── server_api.py                 # Managed HL7 server instances (with message logging)
+│   ├── proxy_api.py                  # HTTP→MLLP proxy management
+│   ├── ai_api.py                     # AI Analysis API (OpenAI, Anthropic, local models)
+│   ├── export_api.py                 # PDF/JSON report generation
+│   ├── analyzer.py                   # Enhanced PCAP analyzer for web UI
+│   └── templates/                    # Jinja2 HTML templates
+│       ├── index.html                # Landing page
+│       ├── login.html                # Login/Register page (tabbed interface)
+│       ├── dashboard.html            # Project listing + management
+│       └── project.html              # Project detail (Client/Fuzzer/Traffic/Server/AI tabs)
+└── testFiles/                        # Sample PCAP files for testing
 ```
 
 ## Essential Commands
@@ -66,13 +93,13 @@ python3 -m medaudit proxy --port 8080 --hl7-port 2575  # For Burp/ZAP integratio
 # HL7 Mock Server (Standalone)
 python3 -m medaudit.hl7server start --port 2575   # MLLP server with ACK responses
 
-# ★ HL7 Fuzzer (Standalone CLI)
+# HL7 Fuzzer (Standalone CLI)
 python3 -m medaudit.fuzzer run -c config.yaml -o results.json   # Run fuzzing from config
 python3 -m medaudit.fuzzer test --host localhost --port 2575    # Test HL7 server connection
 python3 -m medaudit.fuzzer template --format yaml > fuzzer.yaml # Generate config template
 python3 -m medaudit.fuzzer validate -c config.yaml              # Validate fuzzing config
 
-# ★ Malicious HL7 Server (Medical Device Robustness Testing)
+# Malicious HL7 Server (Medical Device Robustness Testing)
 python3 -m medaudit.fuzzer server --mode no_ack --port 2575     # No ACK response
 python3 -m medaudit.fuzzer server --mode broken_ack             # Malformed ACK messages
 python3 -m medaudit.fuzzer server --mode flood_ack --flood-count 500  # ACK flood attack
@@ -348,10 +375,277 @@ open http://localhost:8080
 # Or register a new account at /register
 ```
 
+## Real-Time Server State Management (Critical for Web UI)
+
+### Dual-State Pattern (Database + In-Memory)
+The web UI manages servers using both persistent and transient state:
+- **Persistent**: SQLite database stores server config, status, and message logs
+- **Transient**: Python dictionary `_active_servers` tracks running instances in memory
+
+**Why both?** Database survives web server restart; in-memory dict provides instant status updates.
+
+### Message Log Polling (`/api/server/projects/{id}/servers/{sid}/logs`)
+
+**Flow:**
+1. UI calls `pollServerLogs()` every 2 seconds when Server tab is visible
+2. API endpoint checks if server is in `_active_servers` (in-memory):
+   - **If found**: Return `message_log` from active server object + `live_status`
+   - **If not found**: Return `message_log` from database + sync stale status if needed
+
+**Code Pattern** (server_api.py):
+```python
+# When retrieving logs, check both sources
+if server_id in _active_servers:
+    live_server = _active_servers[server_id]
+    live_status = live_server.get("status", "unknown")
+    message_log = live_server.get("message_log", [])
+    # Return live status + current messages
+else:
+    # Server not in memory (web server restarted)
+    # Return from database, but fix stale "running" status
+    if server.status == "running":
+        server.status = "stopped"
+        db.commit()
+    message_log = server.message_log or []
+```
+
+**UI Fallback** (project.html):
+```javascript
+async function pollServerLogs() {
+    // Check both live_status and status fields
+    const liveStatus = data.live_status || data.status;
+    if (liveStatus === 'running' && data.live_message_log) {
+        // Use live log from in-memory state
+    } else if (data.status === 'running') {
+        // Fallback to database messages
+    }
+}
+```
+
+### Server Startup/Shutdown Lifecycle
+
+**Starting a Server** (`run_server()` in server_api.py):
+```python
+# 1. Add to active dict (immediate UI update)
+_active_servers[sid] = {
+    "server_obj": server,
+    "status": "running",
+    "message_log": [],
+    "thread": Thread(...)
+}
+
+# 2. Start thread with server.start() method
+thread.start()
+
+# 3. Finally block (critical fix):
+#    ONLY mark as stopped if it was actually running
+#    (prevents false "stopped" when normal shutdown occurs)
+finally:
+    if _active_servers[sid].get("status") == "running":
+        _active_servers[sid]["status"] = "stopped"
+```
+
+**Stopping a Server** (`stop_server()` API):
+```python
+# 1. Remove from active dict first
+if sid in _active_servers:
+    _active_servers[sid]["server_obj"].shutdown()
+    del _active_servers[sid]
+
+# 2. Update database to match
+server.status = "stopped"
+db.commit()
+```
+
+### Proxy State Management (Port Availability Checking)
+
+**Problem**: Browser refresh + stale in-memory state causes false "already running" errors
+
+**Solution: Three-Tier Port Checking** (proxy_api.py):
+```python
+import socket
+
+def is_port_available(port):
+    # Tier 1: Check if port actually has a listening socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    result = sock.connect_ex(('127.0.0.1', port))
+    sock.close()
+    
+    if result == 0:
+        # Port is in use, socket connected
+        return False
+    
+    # Tier 2: Check if tracked in active_proxies dict
+    if port in active_proxies:
+        # Verify process is still running
+        if not active_proxies[port].is_alive():
+            del active_proxies[port]  # Clean up stale entry
+    
+    return True
+```
+
+**UI State Recovery** (project.html - `checkProxyStatus()`):
+```javascript
+async function checkProxyStatus() {
+    const response = await fetch(`/api/proxy/status?proxy_port=${proxyPort}`);
+    const data = await response.json();
+    
+    if (data.success && data.proxy?.status === 'running') {
+        // Proxy actually running, update UI buttons
+        startProxyBtn.style.display = 'none';
+        stopProxyBtn.style.display = 'inline';
+    } else {
+        // Proxy not running, show start button
+        startProxyBtn.style.display = 'inline';
+        stopProxyBtn.style.display = 'none';
+    }
+}
+
+// Call on page load to sync UI with actual server state
+document.addEventListener('DOMContentLoaded', () => {
+    loadProject();
+    checkProxyStatus();  // Recover state after refresh
+});
+```
+
+### Debugging In-Memory vs Database State Mismatches
+
+**Common Scenario: Web Server Restart**
+
+1. **Before restart**:
+   - Server in `_active_servers` with status="running"
+   - Database shows status="running"
+   - UI shows "Stop" button
+
+2. **Web server restarts**:
+   - `_active_servers` dict cleared (process memory lost)
+   - Database still shows status="running" (stale)
+   - UI queries API, gets stale status from database
+
+3. **Fix: API syncs state**:
+   ```python
+   # In list_servers() endpoint
+   for s in servers:
+       if s.id in _active_servers:
+           # Server running in memory, trust that status
+           s.live_status = _active_servers[s.id].get("status")
+           s.status = s.live_status  # Override database
+       else:
+           # Server not in memory
+           if s.status == "running":
+               # Database shows running but process is gone
+               s.status = "stopped"
+               db.commit()
+   ```
+
+### Message Log Polling Pitfalls
+
+**❌ WRONG**: Only check database status
+```python
+# BUG: Will show "No messages" even if server is running
+if server.status != "running":
+    return {"messages": []}
+```
+
+**✓ CORRECT**: Check both live and database status
+```python
+# CORRECT: Check in-memory first
+if server_id in _active_servers:
+    return {"messages": _active_servers[server_id]["message_log"]}
+
+# Fallback to database
+if server.status == "running":
+    return {"messages": server.message_log}
+```
+
 ## Setup (Post-clone)
 ```bash
 pip install -r requirements.txt
 python -m spacy download en_core_web_lg  # Required for Presidio NLP
+```
+
+## Debugging State Synchronization Issues
+
+### Problem Identification Checklist
+1. **UI shows wrong status after refresh** → Check `_active_servers` vs database state mismatch
+2. **Messages not showing in Server tab** → Verify polling hits both `live_message_log` and database log
+3. **Proxy "already running" error on refresh** → Check if `active_proxies` dict has stale entries
+4. **Server shows "Stopped" when actively running** → Check if `finally` block is running unconditionally
+
+### Tools for Debugging
+
+**Check In-Memory Server State**:
+```python
+from medaudit.web.server_api import _active_servers
+
+# During debugging: inspect what's actually in memory
+print(_active_servers)  # Shows all running servers
+print(_active_servers.get(server_id, {}).get("status"))  # Check live status
+```
+
+**Check Database Status**:
+```python
+from medaudit.web.database import get_db, ServerInstance
+
+db = next(get_db())
+server = db.query(ServerInstance).get(server_id)
+print(f"DB Status: {server.status}")  # Compare with live status
+```
+
+**Verify Port Availability**:
+```python
+import socket
+
+def check_port(port):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    result = sock.connect_ex(('127.0.0.1', port))
+    sock.close()
+    return result == 0  # True if port in use
+```
+
+**Check Message Log Size**:
+```javascript
+// In browser console, verify messages are being collected
+fetch('/api/server/projects/1/servers/1/logs')
+    .then(r => r.json())
+    .then(d => console.log('Messages:', d.live_message_log?.length || 0))
+```
+
+### Common Fix Patterns
+
+**Pattern 1: Add Dual-State Checking**
+```python
+# Before: Only checked one source
+if server.status != "running":
+    return error()
+
+# After: Check both sources
+if server.id in _active_servers or server.status == "running":
+    # Handle as running
+```
+
+**Pattern 2: Add Status Sync on Restart Detection**
+```python
+# Before: Assumed database was always accurate
+# After: Detect if server was removed from memory
+if server_id not in _active_servers and server.status == "running":
+    server.status = "stopped"
+    db.commit()
+```
+
+**Pattern 3: Add Socket Verification Before Using Stale Tracking**
+```python
+# Before: Trusted in-memory dict only
+if port in active_proxies:
+    raise "Already running"
+
+# After: Verify port actually in use
+if is_port_in_use(port):
+    if port in active_proxies:
+        # Track is correct
+    else:
+        # Stale process, clean up dict
+        del active_proxies[port]
 ```
 
 ## Key Constraints
@@ -364,3 +658,6 @@ python -m spacy download en_core_web_lg  # Required for Presidio NLP
 7. Project ownership is enforced—users can only access their own projects
 8. Use `require_auth` dependency for protected endpoints
 9. Database sessions managed via `get_db` dependency injection
+10. **CRITICAL**: Always use dual-state checking for servers/proxies (in-memory + database)
+11. **CRITICAL**: Never rely solely on in-memory dicts across web server restarts
+12. **CRITICAL**: Socket connectivity checks are more reliable than process tracking
