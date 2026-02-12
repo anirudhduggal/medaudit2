@@ -262,6 +262,22 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- Fuzzing Logs Section -->
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <i class="bi bi-file-earmark-text me-2"></i>Fuzzing Test History & Logs
+                            </div>
+                            <div class="card-body">
+                                <div id="fuzzingJobsList" style="max-height: 500px; overflow-y: auto;">
+                                    <div class="empty-state"><i class="bi bi-inbox"></i><p>No fuzzing jobs yet</p></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- TRAFFIC TAB -->
@@ -603,6 +619,7 @@
                 loadTemplates();
                 loadServers();
                 loadFuzzerTemplate();
+                loadFuzzingJobsList();
                 checkProxyStatus();  // Check if proxy is already running
             } catch (error) {
                 console.error('Load project error:', error);
@@ -903,6 +920,125 @@
             document.getElementById('fuzzerConfig').value = data.yaml;
         }
 
+        async function loadFuzzingJobsList() {
+            try {
+                const response = await fetch(`/api/fuzzer/projects/${projectId}/jobs`);
+                const data = await response.json();
+                const jobs = data.jobs || [];
+                
+                if (jobs.length === 0) {
+                    document.getElementById('fuzzingJobsList').innerHTML = 
+                        '<div class="empty-state"><i class="bi bi-inbox"></i><p>No fuzzing jobs yet</p></div>';
+                    return;
+                }
+                
+                let html = '<div class="table-responsive"><table class="table table-sm mb-0">';
+                html += '<thead><tr><th>Job Name</th><th>Status</th><th>Requests</th><th>Findings</th><th>Created</th><th>Actions</th></tr></thead><tbody>';
+                
+                for (const job of jobs) {
+                    const createdDate = new Date(job.created_at).toLocaleDateString();
+                    const status = job.status || 'unknown';
+                    const statusBadge = {
+                        'completed': 'success',
+                        'running': 'primary',
+                        'pending': 'secondary',
+                        'error': 'danger',
+                        'stopped': 'warning'
+                    }[status] || 'secondary';
+                    
+                    html += `<tr>
+                        <td><strong>${escapeHtml(job.name)}</strong></td>
+                        <td><span class="badge bg-${statusBadge}">${status}</span></td>
+                        <td>${job.total_requests || 0}</td>
+                        <td><span class="text-warning font-weight-bold">${job.interesting_findings || 0}</span></td>
+                        <td><small>${createdDate}</small></td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick="showFuzzingJobLogs('${job.id}', '${escapeHtml(job.name)}')">
+                                <i class="bi bi-download me-1"></i>Logs
+                            </button>
+                        </td>
+                    </tr>`;
+                }
+                
+                html += '</tbody></table></div>';
+                document.getElementById('fuzzingJobsList').innerHTML = html;
+            } catch (e) {
+                console.error('Failed to load fuzzing jobs:', e);
+                document.getElementById('fuzzingJobsList').innerHTML = 
+                    '<div class="alert alert-danger mb-0">Failed to load jobs</div>';
+            }
+        }
+
+        async function showFuzzingJobLogs(jobId, jobName) {
+            try {
+                const response = await fetch(`/api/fuzzer/projects/${projectId}/jobs/${jobId}/logs/summary`);
+                const logInfo = await response.json();
+                
+                const logsExist = {
+                    detailed: logInfo.available_logs.detailed_traffic_log.exists,
+                    findings: logInfo.available_logs.findings_log.exists,
+                    summary: logInfo.available_logs.summary_log.exists
+                };
+                
+                let html = `<h5>${escapeHtml(jobName)}</h5>`;
+                html += `<p class="text-muted small">Job ID: ${jobId}</p>`;
+                html += '<div class="d-grid gap-2">';
+                
+                if (logsExist.detailed) {
+                    html += `<a href="${logInfo.available_logs.detailed_traffic_log.download_url}" class="btn btn-sm btn-outline-primary" download>
+                        <i class="bi bi-download me-2"></i>Download Detailed Traffic Log (JSON Lines)
+                    </a>`;
+                }
+                
+                if (logsExist.findings) {
+                    html += `<a href="${logInfo.available_logs.findings_log.download_url}" class="btn btn-sm btn-outline-warning" download>
+                        <i class="bi bi-download me-2"></i>Download Findings Log (JSON Lines)
+                    </a>`;
+                }
+                
+                if (logsExist.summary) {
+                    html += `<a href="${logInfo.available_logs.summary_log.download_url}" class="btn btn-sm btn-outline-success" download>
+                        <i class="bi bi-download me-2"></i>Download Summary Report (JSON)
+                    </a>`;
+                }
+                
+                html += '</div>';
+                
+                // Show modal with logs
+                showCustomModal('Fuzzing Logs', html);
+            } catch (e) {
+                console.error('Failed to load logs:', e);
+                alert('Failed to load logs: ' + e.message);
+            }
+        }
+
+        function showCustomModal(title, content) {
+            // Create a simple modal or use an existing one
+            const modal = document.createElement('div');
+            modal.className = 'modal fade';
+            modal.id = 'logModal';
+            modal.innerHTML = `
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">${escapeHtml(title)}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            ${content}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            const bsModal = new bootstrap.Modal(modal);
+            bsModal.show();
+            
+            // Cleanup when hidden
+            modal.addEventListener('hidden.bs.modal', () => modal.remove());
+        }
+
         // Fuzzer state
         let activeFuzzJobId = null;
         let fuzzerPollInterval = null;
@@ -1073,6 +1209,7 @@
                     stopFuzzerPolling();
                     activeFuzzJobId = null;
                     updateFuzzerUI(false);
+                    loadFuzzingJobsList(); // Reload jobs list to show completed job with logs
                 }
             } catch (e) {
                 console.error('Poll error:', e);

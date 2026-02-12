@@ -150,13 +150,55 @@ tests/results/
 tests/.pytest_cache/
 tests/__pycache__/
 
-# Logging directories (all log files and directories)
+# Project-specific: Medaudit runtime data
+# ============================================
+# Runtime logs
 logs/
 **/logs/
 *.log
 *.jsonl
+
 # HL7 Server logs
 logs/hl7server/
 logs/2026-*
 logs/test_hl7server/
+medaudit/logs/
+medaudit/logs/**/*.jsonl
+medaudit/logs/**/*.log
+
+# Runtime data and database
 medaudit/data/medaudit.db
+medaudit/data/*.db
+medaudit/data/artifacts/
+medaudit/data/fuzzing_logs/
+
+# Project artifacts
+artifacts/
+*.pcap.processed
+*.json.tmp
+
+# Proxy activity logs
+proxy_activity.jsonl
+test_logs/proxy_activity.jsonl
+
+# Test data and results
+test_logs/
+tests/logs/
+tests/results/
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
+*~.nib
+
+# Environment and configuration overrides
+.env.local
+.env.*.local
+config.local.json
+hl7server.local.json
+
+# Session and cache files
+*.session
+.cache/
+session_*

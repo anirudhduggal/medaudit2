@@ -32,12 +32,13 @@ LOGS_DIR = PACKAGE_DIR / "logs"
 DATABASE_PATH = DATA_DIR / "medaudit.db"
 ARTIFACTS_DIR = DATA_DIR / "artifacts"
 PROJECTS_ARTIFACTS_DIR = ARTIFACTS_DIR / "projects"
+FUZZING_LOGS_DIR = DATA_DIR / "fuzzing_logs"
 CONFIG_FILE = CONFIG_DIR / "medaudit.json"
 
 
 def ensure_directories():
     """Create all required directories if they don't exist."""
-    for directory in [DATA_DIR, ARTIFACTS_DIR, PROJECTS_ARTIFACTS_DIR, CONFIG_DIR, LOGS_DIR]:
+    for directory in [DATA_DIR, ARTIFACTS_DIR, PROJECTS_ARTIFACTS_DIR, CONFIG_DIR, LOGS_DIR, FUZZING_LOGS_DIR]:
         directory.mkdir(parents=True, exist_ok=True)
 
 
@@ -83,6 +84,26 @@ def get_project_pcaps_dir(project_id: str) -> Path:
     pcaps_dir = get_project_artifacts_dir(project_id) / "pcaps"
     pcaps_dir.mkdir(parents=True, exist_ok=True)
     return pcaps_dir
+
+
+def get_fuzzing_logs_dir() -> Path:
+    """Get the fuzzing logs directory path, creating it if needed."""
+    FUZZING_LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    return FUZZING_LOGS_DIR
+
+
+def get_project_fuzzing_logs_dir(project_id: str) -> Path:
+    """Get the fuzzing logs directory for a specific project."""
+    project_fuzzing_dir = FUZZING_LOGS_DIR / project_id
+    project_fuzzing_dir.mkdir(parents=True, exist_ok=True)
+    return project_fuzzing_dir
+
+
+def get_fuzzing_job_logs_dir(project_id: str, job_id: str) -> Path:
+    """Get the fuzzing logs directory for a specific fuzzing job."""
+    job_logs_dir = get_project_fuzzing_logs_dir(project_id) / job_id
+    job_logs_dir.mkdir(parents=True, exist_ok=True)
+    return job_logs_dir
 
 
 def get_config_file() -> Path:

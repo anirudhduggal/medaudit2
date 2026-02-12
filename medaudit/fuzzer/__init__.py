@@ -38,6 +38,7 @@ from .malicious_hl7_server import (
     quick_test_flood,
     quick_test_random,
 )
+from .traffic_logger import FuzzingTrafficLogger, FuzzingTrafficEntry
 
 __all__ = [
     # Strategies
@@ -63,6 +64,9 @@ __all__ = [
     "quick_test_broken_ack",
     "quick_test_flood",
     "quick_test_random",
+    # Traffic Logging
+    "FuzzingTrafficLogger",
+    "FuzzingTrafficEntry",
 ]
 
 __version__ = "1.0.0"

@@ -123,13 +123,6 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class RegisterRequest(BaseModel):
-    """Registration request schema."""
-    username: str
-    password: str
-    full_name: Optional[str] = None
-
-
 class ChangePasswordRequest(BaseModel):
     """Password change request schema."""
     current_password: str
@@ -253,6 +246,15 @@ async def login(
         samesite="lax"
     )
     
+    # Check if this is the first login (password not yet changed from default)
+    if user.password_changed_at is None:
+        # Force password change on first login
+        return {
+            "success": True,
+            "user": user.to_dict(),
+            "redirect": "/change-password-first-login"
+        }
+    
     # SECURITY: Do not return token in response body - only in httpOnly cookie
     return {
         "success": True,
@@ -275,77 +277,6 @@ async def logout(request: Request, response: Response, db: Session = Depends(get
     # Clear the cookie
     response.delete_cookie("session_token", path="/")
     return {"success": True, "message": "Logged out successfully"}
-
-
-@router.post("/register")
-async def register(
-    request: RegisterRequest,
-    http_request: Request,
-    response: Response,
-    db: Session = Depends(get_db)
-):
-    """
-    Register a new user account.
-    Automatically logs in the user after registration.
-    """
-    client_ip = _get_client_ip(http_request)
-    
-    # Check rate limiting for registration (more lenient than login)
-    # Note: Rate limiting is still tracked but with higher threshold for testing
-    # In production, consider implementing separate rate limit tracking for registration
-    
-    # Validate username uniqueness
-    existing_user = db.query(User).filter(
-        User.username == request.username
-    ).first()
-    
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Username already taken")
-    
-    # Validate password strength
-    if len(request.password) < 8:
-        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
-    
-    # Create new user
-    new_user = User(
-        username=request.username,
-        email=f"{request.username}@medaudit.local",  # Auto-generate email from username
-        full_name=request.full_name,
-        is_active=True,
-        is_admin=False  # Regular users are not admins by default
-    )
-    new_user.set_password(request.password)
-    
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    
-    # Automatically log in the new user
-    session = UserSession(
-        user_id=new_user.id,
-        token=UserSession.create_token(),
-        expires_at=datetime.utcnow() + timedelta(hours=SESSION_DURATION_HOURS)
-    )
-    db.add(session)
-    new_user.last_login = datetime.utcnow()
-    db.commit()
-    
-    # Set session cookie
-    response.set_cookie(
-        key="session_token",
-        value=session.token,
-        httponly=True,
-        secure=_is_secure_context(),
-        max_age=SESSION_DURATION_HOURS * 3600,
-        samesite="lax"
-    )
-    
-    return {
-        "success": True,
-        "user": new_user.to_dict(),
-        "message": "Registration successful",
-        "redirect": "/dashboard"
-    }
 
 
 @router.get("/me")
@@ -378,8 +309,9 @@ async def change_password(
     if len(request.new_password) < 8:
         raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
     
-    # Update password
+    # Update password and mark as changed
     user.set_password(request.new_password)
+    user.password_changed_at = datetime.utcnow()
     db.commit()
     
     return {

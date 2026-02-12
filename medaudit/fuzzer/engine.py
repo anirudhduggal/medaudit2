@@ -374,7 +374,8 @@ def run_fuzzing_job(
     job_id: str, 
     config: dict, 
     db_session_factory=None,
-    progress_callback=None
+    progress_callback=None,
+    project_id: str = None
 ) -> Dict[str, Any]:
     """
     Execute a fuzzing job.
@@ -388,6 +389,7 @@ def run_fuzzing_job(
         config: Fuzzing configuration dictionary
         db_session_factory: Optional SQLAlchemy session factory for DB updates
         progress_callback: Optional callback(progress, stats) for progress updates
+        project_id: Optional project ID for organizing logs
         
     Returns:
         Dictionary containing job results:
@@ -397,9 +399,10 @@ def run_fuzzing_job(
         - errors: Number of failed requests
         - interesting: Number of interesting findings
         - findings: List of interesting finding details
+        - traffic_log_dir: Directory containing traffic logs
         
     Example:
-        >>> result = run_fuzzing_job("job-123", config)
+        >>> result = run_fuzzing_job("job-123", config, project_id="proj-456")
         >>> print(f"Found {result['interesting']} interesting cases")
     """
     global _active_jobs
@@ -417,8 +420,23 @@ def run_fuzzing_job(
     }
     
     db = None
+    traffic_logger = None
     
     try:
+        # Initialize traffic logger
+        job_name = config.get("name", f"Job {job_id[:8]}")
+        
+        if project_id:
+            from medaudit.utils.paths import get_fuzzing_job_logs_dir
+            log_dir = get_fuzzing_job_logs_dir(project_id, job_id)
+            log_base_dir = log_dir.parent
+        else:
+            from medaudit.utils.paths import get_fuzzing_logs_dir
+            log_base_dir = get_fuzzing_logs_dir()
+        
+        from medaudit.fuzzer.traffic_logger import FuzzingTrafficLogger
+        traffic_logger = FuzzingTrafficLogger(log_base_dir, job_id, job_name)
+        
         # Update database if available
         if db_session_factory:
             from medaudit.web.database import FuzzingJob
@@ -427,6 +445,10 @@ def run_fuzzing_job(
             if job:
                 job.status = "running"
                 job.started_at = datetime.utcnow()
+                job.traffic_log_dir = str(traffic_logger.log_directory)
+                job.detailed_traffic_log = str(traffic_logger.get_detailed_log_path())
+                job.findings_log = str(traffic_logger.get_findings_log_path())
+                job.summary_log = str(traffic_logger.get_summary_path())
                 db.commit()
         
         # Extract config values
@@ -473,6 +495,22 @@ def run_fuzzing_job(
                 timeout=timeout
             )
             
+            # Log traffic
+            if traffic_logger:
+                traffic_logger.log_traffic(
+                    request_message=msg_data["message"],
+                    response_message=result.get("response"),
+                    response_time_ms=result.get("response_time_ms", 0),
+                    rule_name=msg_data["rule"],
+                    mutation_type=msg_data["mutation"],
+                    success=result.get("success", False),
+                    is_interesting=result.get("is_interesting", False),
+                    finding_type=result.get("finding_type"),
+                    error_message=result.get("error"),
+                    status_code=result.get("status_code"),
+                    original_value=msg_data.get("original_value")
+                )
+            
             # Update stats
             _active_jobs[job_id]["total_requests"] += 1
             _active_jobs[job_id]["progress"] = int((i + 1) / total * 100)
@@ -518,6 +556,11 @@ def run_fuzzing_job(
         
         _active_jobs[job_id]["status"] = final_status
         
+        # Finalize traffic logger
+        log_summary = None
+        if traffic_logger:
+            log_summary = traffic_logger.finalize(final_status)
+        
         # Update database
         if db_session_factory and db:
             from medaudit.web.database import FuzzingJob
@@ -533,7 +576,7 @@ def run_fuzzing_job(
                 job.findings = findings
                 db.commit()
         
-        return {
+        result_dict = {
             "status": final_status,
             "total_requests": _active_jobs[job_id]["total_requests"],
             "successful": _active_jobs[job_id]["successful"],
@@ -542,10 +585,19 @@ def run_fuzzing_job(
             "findings": findings
         }
         
+        if log_summary:
+            result_dict["log_summary"] = log_summary
+        
+        return result_dict
+        
     except Exception as e:
         logger.error(f"Fuzzing job {job_id} failed: {e}")
         _active_jobs[job_id]["status"] = "error"
         _active_jobs[job_id]["error"] = str(e)
+        
+        # Finalize traffic logger on error
+        if traffic_logger:
+            traffic_logger.finalize("error")
         
         if db_session_factory:
             try:

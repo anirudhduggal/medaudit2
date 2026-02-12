@@ -24,6 +24,9 @@ sqlalchemy>=2.0.0
 # Configuration parsing
 pyyaml>=6.0
 
+# System utilities
+psutil>=6.0.0
+
 # PDF Report Generation
 reportlab>=4.0.0
 

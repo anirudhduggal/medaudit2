@@ -151,6 +151,12 @@ async def login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
 
 
+@app.get("/change-password-first-login", response_class=HTMLResponse)
+async def change_password_first_login_page(request: Request):
+    """Serve the forced first-login password change page."""
+    return templates.TemplateResponse("change_password_first_login.html", {"request": request})
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard_page(request: Request):
     """Serve the main dashboard."""

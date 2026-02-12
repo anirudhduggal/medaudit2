@@ -20,6 +20,7 @@ Endpoints:
 import threading
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
@@ -168,7 +169,8 @@ async def create_fuzzing_job(
     
     thread = threading.Thread(
         target=run_fuzzing_job,
-        args=(job.id, config, db_manager.SessionLocal)
+        args=(job.id, config, db_manager.SessionLocal),
+        kwargs={"project_id": project_id}
     )
     thread.daemon = True
     thread.start()
@@ -409,3 +411,193 @@ async def quick_test(
     
     result = send_hl7_message(host, port, message, use_tls)
     return result
+
+
+@router.get("/projects/{project_id}/jobs/{job_id}/logs/download/detailed")
+async def download_detailed_traffic_logs(
+    project_id: str,
+    job_id: str,
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """
+    Download detailed traffic logs (JSON Lines format) for a specific fuzzing job.
+    
+    Returns:
+        JSON Lines file with all requests and responses
+    """
+    from medaudit.web.database import FuzzingJob
+    from fastapi.responses import FileResponse
+    
+    job = db.query(FuzzingJob).filter(
+        FuzzingJob.id == job_id,
+        FuzzingJob.project_id == project_id
+    ).first()
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Verify project ownership
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.owner_id == user.id
+    ).first()
+    
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if not job.detailed_traffic_log or not Path(job.detailed_traffic_log).exists():
+        raise HTTPException(status_code=404, detail="Traffic log not found")
+    
+    return FileResponse(
+        path=job.detailed_traffic_log,
+        filename=f"traffic_detailed_{job_id}.jsonl",
+        media_type="application/json"
+    )
+
+
+@router.get("/projects/{project_id}/jobs/{job_id}/logs/download/findings")
+async def download_findings_logs(
+    project_id: str,
+    job_id: str,
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """
+    Download findings logs (JSON Lines format) for a specific fuzzing job.
+    
+    Returns:
+        JSON Lines file with all interesting findings
+    """
+    from medaudit.web.database import FuzzingJob
+    from fastapi.responses import FileResponse
+    
+    job = db.query(FuzzingJob).filter(
+        FuzzingJob.id == job_id,
+        FuzzingJob.project_id == project_id
+    ).first()
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Verify project ownership
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.owner_id == user.id
+    ).first()
+    
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if not job.findings_log or not Path(job.findings_log).exists():
+        raise HTTPException(status_code=404, detail="Findings log not found")
+    
+    return FileResponse(
+        path=job.findings_log,
+        filename=f"findings_{job_id}.jsonl",
+        media_type="application/json"
+    )
+
+
+@router.get("/projects/{project_id}/jobs/{job_id}/logs/download/summary")
+async def download_summary_logs(
+    project_id: str,
+    job_id: str,
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """
+    Download summary report (JSON format) for a specific fuzzing job.
+    
+    Returns:
+        JSON file with job summary and statistics
+    """
+    from medaudit.web.database import FuzzingJob
+    from fastapi.responses import FileResponse
+    
+    job = db.query(FuzzingJob).filter(
+        FuzzingJob.id == job_id,
+        FuzzingJob.project_id == project_id
+    ).first()
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Verify project ownership
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.owner_id == user.id
+    ).first()
+    
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if not job.summary_log or not Path(job.summary_log).exists():
+        raise HTTPException(status_code=404, detail="Summary log not found")
+    
+    return FileResponse(
+        path=job.summary_log,
+        filename=f"summary_{job_id}.json",
+        media_type="application/json"
+    )
+
+
+@router.get("/projects/{project_id}/jobs/{job_id}/logs/summary")
+async def get_logs_summary(
+    project_id: str,
+    job_id: str,
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """
+    Get information about available logs for a fuzzing job.
+    
+    Returns:
+        Information about log files and their paths
+    """
+    from medaudit.web.database import FuzzingJob
+    
+    job = db.query(FuzzingJob).filter(
+        FuzzingJob.id == job_id,
+        FuzzingJob.project_id == project_id
+    ).first()
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Verify project ownership
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.owner_id == user.id
+    ).first()
+    
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    from pathlib import Path
+    
+    # Check which logs exist
+    logs_info = {
+        "job_id": job_id,
+        "job_name": job.name,
+        "log_directory": job.traffic_log_dir,
+        "available_logs": {
+            "detailed_traffic_log": {
+                "path": job.detailed_traffic_log,
+                "exists": job.detailed_traffic_log and Path(job.detailed_traffic_log).exists(),
+                "download_url": f"/api/fuzzer/projects/{project_id}/jobs/{job_id}/logs/download/detailed"
+            },
+            "findings_log": {
+                "path": job.findings_log,
+                "exists": job.findings_log and Path(job.findings_log).exists(),
+                "download_url": f"/api/fuzzer/projects/{project_id}/jobs/{job_id}/logs/download/findings"
+            },
+            "summary_log": {
+                "path": job.summary_log,
+                "exists": job.summary_log and Path(job.summary_log).exists(),
+                "download_url": f"/api/fuzzer/projects/{project_id}/jobs/{job_id}/logs/download/summary"
+            }
+        }
+    }
+    
+    return logs_info

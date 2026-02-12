@@ -96,6 +96,7 @@ class User(Base):
     is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login = Column(DateTime, nullable=True)
+    password_changed_at = Column(DateTime, nullable=True)  # Track if password has been changed from default
 
     # Relationships
     projects = relationship("Project", back_populates="owner", cascade="all, delete-orphan")
@@ -119,7 +120,8 @@ class User(Base):
             "is_active": self.is_active,
             "is_admin": self.is_admin,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "last_login": self.last_login.isoformat() if self.last_login else None
+            "last_login": self.last_login.isoformat() if self.last_login else None,
+            "password_changed_at": self.password_changed_at.isoformat() if self.password_changed_at else None
         }
 
 
@@ -319,6 +321,12 @@ class FuzzingJob(Base):
     results = Column(JSON, default=list)
     findings = Column(JSON, default=list)
     
+    # Traffic logging paths
+    traffic_log_dir = Column(String(500), nullable=True)  # Path to traffic logs directory
+    detailed_traffic_log = Column(String(500), nullable=True)  # Path to detailed traffic log
+    findings_log = Column(String(500), nullable=True)  # Path to findings log
+    summary_log = Column(String(500), nullable=True)  # Path to summary log
+    
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -343,7 +351,11 @@ class FuzzingJob(Base):
             "interesting_findings": self.interesting_findings,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "traffic_log_dir": self.traffic_log_dir,
+            "detailed_traffic_log": self.detailed_traffic_log,
+            "findings_log": self.findings_log,
+            "summary_log": self.summary_log
         }
 
 
