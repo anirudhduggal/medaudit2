@@ -8,7 +8,7 @@ Medical device security analyzer for HL7/FHIR traffic with PCAP analysis, real-t
 - **Analyze PCAP**: `python3 -m medaudit analyze <file.pcap>`
 - **Web UI**: `python3 -m medaudit web --port 8080` (then `http://localhost:8080`)
 - **Proxy**: `python3 -m medaudit proxy --port 8080 --hl7-host localhost --hl7-port 2575`
-- **HL7 Server**: `python3 -m hl7server start --port 2575`
+- **HL7 Server**: `python3 -m medaudit.hl7server start --port 2575`
 
 ## Key Code Locations
 | Task | File |

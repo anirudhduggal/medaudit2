@@ -2,6 +2,8 @@
 
 **Version**: 2.0.0 | **Status**: ✅ Production Ready | **Last Updated**: February 1, 2026
 
+**Agent Instructions**: Development agents and contributors should read the project-specific agent guidance in `.github/copilot-instructions.md` before making edits.
+
 Medaudit 2.0 is a comprehensive security analysis tool for HL7 v2.x and FHIR medical device communications. It provides PCAP traffic analysis, PII detection, HTTP-to-HL7 proxying, and a mock HL7 server for pentesting medical devices in controlled environments.
 
 ---
@@ -52,12 +54,14 @@ Detected PII instances: 3
 # Start server on port 2575
 python -m medaudit.hl7server start --port 2575
 
-# Configure server
-python -m medaudit.hl7server config --show
-python -m medaudit.hl7server config --set port 2576
+# Start with custom host
+python -m medaudit.hl7server start --host 0.0.0.0 --port 2576
 
-# Check server status
-python -m medaudit.hl7server status
+# Show server configuration
+python -m medaudit.hl7server config --show
+
+# Create default configuration file
+python -m medaudit.hl7server config --create
 ```
 
 **Features:**
@@ -132,7 +136,6 @@ curl -X POST http://localhost:8080/ \
 - ✅ **HL7 Fuzzer**: Web-based fuzzer with YAML/JSON rule configuration
 - ✅ **Traffic Analysis**: PCAP upload with network visualization and sequence diagrams
 - ✅ **Server Management**: Create and manage multiple HL7 server instances
-- ✅ **Export Features**: Generate PDF security reports and JSON exports
 
 **Getting Started:**
 
@@ -229,8 +232,9 @@ python -m medaudit analyze medaudit/testFiles/hl7_v2_unencrypted_synthetic.pcap
 | `web` | Start web UI platform | `python -m medaudit web --port 8080` |
 | `proxy` | Start HTTP-to-HL7 proxy | `python -m medaudit proxy --port 8080` |
 | `config` | Manage configuration | `python -m medaudit config --show` |
-| `hl7server start` | Start HL7 server | `python -m medaudit.hl7server start` |
-| `hl7server config` | Configure HL7 server | `python -m medaudit.hl7server config --set port 2576` |
+| `user` | Create user (local admin) | `python -m medaudit user --create --username john --password pass123` |
+| `hl7server start` | Start HL7 server | `python -m medaudit.hl7server start --port 2575` |
+| `hl7server config` | Configure HL7 server | `python -m medaudit.hl7server config --show` |
 | `fuzzer run` | Run HL7 fuzzer | `python -m medaudit.fuzzer run -c config.yaml` |
 
 ### Configuration

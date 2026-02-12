@@ -57,6 +57,13 @@ Complete documentation for the medical device security analyzer.
   - Architecture validation
   - No redundant code detected
 
+### Developer & AI Assistant Resources
+- **[AI Assistants Guide](AI_ASSISTANTS.md)** - Configuration for Cursor, Windsurf, Copilot, Gemini, and LLMs
+  - Overview of all rules files (`.cursorrules`, `.windsurfrules`, `.geminirules`, `llms.txt`, `copilot-instructions.md`)
+  - When each file is used
+  - Consistency checklist
+  - How to pick the right rules for your use case
+
 ---
 
 ## 🎯 Documentation by Use Case

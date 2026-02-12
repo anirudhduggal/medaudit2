@@ -2,7 +2,7 @@
 
 Medical device security analyzer for HL7/FHIR traffic. Detects encryption status, extracts HL7 v2.x messages, identifies PII exposure using Presidio NLP + regex patterns. Features a full-stack web UI with authentication, project management, HL7 client/fuzzer, traffic analysis with visualization, and PDF/JSON export.
 
-## Current Status (February 7, 2026)
+## Current Status (February 11, 2026)
 
 ### Recently Fixed Issues
 1. **Server Message Log Display** - Fixed UI polling to properly display received HL7 messages in real-time
@@ -23,6 +23,21 @@ Medical device security analyzer for HL7/FHIR traffic. Detects encryption status
 - Proxy error handling needs improvement for concurrent port checks
 - Server status should be persisted to disk for recovery after web server restart
 - Consider adding WebSocket for real-time log updates instead of polling
+
+## Agent Responsibilities
+
+This document is intended for AI-assisted development agents (Copilot/Code Assistant) working on the `medaudit` codebase. Agents should follow these rules when editing, testing, or documenting the project:
+
+- **Safety First**: Never output or suggest real patient data. Use synthetic or redacted examples in docs and tests.
+- **Use Centralized Paths**: Prefer `medaudit.paths` helpers for any filesystem locations (data, logs, artifacts).
+- **Dual-State Handling**: When working on server/proxy code, check both in-memory state and database state before changing statuses.
+- **Non-destructive Edits**: Make minimal, focused code changes. Do not reformat unrelated files or change public APIs without explicit user approval.
+- **Testing**: Run relevant tests after changes (`pytest tests/<target> -q`) and fix only failures introduced by your edits.
+- **Logging and Errors**: Log errors with context, and return safe defaults; do not crash the process on malformed inputs.
+- **Documentation**: Update `README.md` and `docs/` whenever behavior or CLI usage changes. Link to this instruction file from the top-level README.
+- **Config Precedence**: Respect the configuration override order (CLI args → medaudit/config/medaudit.json → user config locations).
+
+If you need clarification on scope or risk, ask the repository owner before making wide-reaching changes.
 
 ## Architecture Overview
 ```
@@ -69,7 +84,6 @@ medaudit/
 │   ├── server_api.py                 # Managed HL7 server instances (with message logging)
 │   ├── proxy_api.py                  # HTTP→MLLP proxy management
 │   ├── ai_api.py                     # AI Analysis API (OpenAI, Anthropic, local models)
-│   ├── export_api.py                 # PDF/JSON report generation
 │   ├── analyzer.py                   # Enhanced PCAP analyzer for web UI
 │   └── templates/                    # Jinja2 HTML templates
 │       ├── index.html                # Landing page
@@ -188,12 +202,6 @@ python3 -m medaudit config --create               # Generate default config file
 | `/api/server/projects/{id}/servers/{sid}/stop` | POST | Stop server |
 | `/api/server/projects/{id}/servers/{sid}` | DELETE | Delete server |
 | `/api/server/projects/{id}/servers/{sid}/logs` | GET | Server message logs |
-
-### Export (`/api/export/*`)
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/export/projects/{id}/pdf` | GET | Generate PDF security report |
-| `/api/export/projects/{id}/json` | GET | Export project as JSON |
 
 ### Health Check
 | Endpoint | Method | Description |
