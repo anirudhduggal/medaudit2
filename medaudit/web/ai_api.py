@@ -1,592 +1,800 @@
 """
-AI Analysis API for Medaudit Web Application.
-Provides agentic capabilities for security auditing and pentesting assistance.
+AI Assistant API for Medaudit Web Application.
+
+Provides endpoints for AI-powered pentest assistance:
+- API key configuration and model selection
+- Chat with full project context
+- Auto-analysis of events
+- Executing AI-suggested actions
+- Token usage tracking
 """
 
-import os
-import json
-from typing import Optional, List, Dict, Any
+import logging
+import threading
+import time
+from typing import Optional, Dict, Any, List
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .database import get_db, Project, User
+from .database import get_db, User, Project
 from .auth import require_auth
+from .ai.providers import get_provider, AIProvider, usage_tracker, AnthropicProvider
+from .ai.context import context_engine
+from .ai.prompts import SYSTEM_PROMPT, AUTO_ANALYZE_PROMPT, CONTEXT_SUMMARY_PROMPT
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 
-class AIConfig(BaseModel):
-    """AI configuration schema."""
-    provider: str  # "openai", "anthropic", "custom"
+# =============================================================================
+# Global AI configuration (multi-provider, stored in memory per session)
+# =============================================================================
+
+# Each configured provider: { "provider": AIProvider, "models": [...], "default_model": "..." }
+_providers: Dict[str, Dict[str, Any]] = {}  # provider_type -> config
+
+# Active provider selection (which provider+model is currently being used)
+_active_provider_type: Optional[str] = None
+_active_model: Optional[str] = None
+
+# Global settings
+_global_settings: Dict[str, Any] = {
+    "auto_analyze": True,
+}
+
+_chat_history: Dict[str, List[Dict[str, str]]] = {}  # project_id -> message history
+_auto_insights: Dict[str, List[Dict[str, Any]]] = {}  # project_id -> insights
+_auto_analyze_thread: Optional[threading.Thread] = None
+_auto_analyze_running = False
+
+_config_lock = threading.Lock()
+
+
+def _get_active_provider() -> Optional[AIProvider]:
+    """Get the currently active provider instance."""
+    with _config_lock:
+        if _active_provider_type and _active_provider_type in _providers:
+            return _providers[_active_provider_type]["provider"]
+    return None
+
+
+def _get_active_model() -> Optional[str]:
+    """Get the currently active model."""
+    with _config_lock:
+        return _active_model
+
+
+def _is_configured() -> bool:
+    """Check if any provider is configured."""
+    with _config_lock:
+        return len(_providers) > 0
+
+
+# =============================================================================
+# Request/Response Schemas
+# =============================================================================
+
+class ConfigureProviderRequest(BaseModel):
+    provider: str  # "anthropic", "openai", "gemini", "ollama"
     api_key: Optional[str] = None
-    model: Optional[str] = None
     base_url: Optional[str] = None
-    mcp_config: Optional[Dict[str, Any]] = None
-    temperature: float = 0.7
-    max_tokens: int = 2000
+    default_model: Optional[str] = None
 
 
-class ChatMessage(BaseModel):
-    """Chat message schema."""
-    role: str  # "user", "assistant", "system"
-    content: str
+class SetActiveRequest(BaseModel):
+    provider: str
+    model: str
 
 
 class ChatRequest(BaseModel):
-    """Chat request schema."""
     message: str
-    context: Optional[Dict[str, Any]] = None
-    history: Optional[List[ChatMessage]] = []
+    project_id: str
+    include_context: bool = True
 
 
-# In-memory storage for user AI configs (per session)
-# In production, consider storing encrypted in database
-_user_configs: Dict[str, AIConfig] = {}
+class ExecuteActionRequest(BaseModel):
+    action_type: str
+    action_data: Dict[str, Any]
+    project_id: str
 
 
-@router.post("/config")
-async def save_ai_config(
-    config: AIConfig,
-    user: User = Depends(require_auth)
+# =============================================================================
+# Configuration Endpoints
+# =============================================================================
+
+@router.post("/providers/configure")
+async def configure_provider(
+    config: ConfigureProviderRequest,
+    user: User = Depends(require_auth),
 ):
-    """Save AI configuration for the current user."""
-    _user_configs[user.id] = config
-    return {"success": True, "message": "AI configuration saved"}
+    """
+    Configure (add/update) an AI provider globally.
+    Validates the key and fetches available models.
+    """
+    global _active_provider_type, _active_model
+    
+    try:
+        provider = get_provider(
+            provider_type=config.provider,
+            api_key=config.api_key,
+            base_url=config.base_url,
+        )
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+    # Validate key
+    is_valid, error = provider.validate_key()
+    if not is_valid:
+        raise HTTPException(status_code=401, detail=f"API key validation failed: {error}")
+    
+    # Fetch available models
+    models = provider.list_models()
+    
+    # Pick default model
+    default_model = config.default_model
+    if not default_model and models:
+        default_model = models[0]["id"]
+    
+    with _config_lock:
+        _providers[config.provider] = {
+            "provider": provider,
+            "models": models,
+            "default_model": default_model,
+        }
+        
+        # If no active provider yet, set this as active
+        if _active_provider_type is None:
+            _active_provider_type = config.provider
+            _active_model = default_model
+    
+    # Start auto-analyze if first provider
+    _start_auto_analyze()
+    
+    return {
+        "success": True,
+        "provider": config.provider,
+        "models": models,
+        "default_model": default_model,
+    }
+
+
+@router.post("/providers/validate")
+async def validate_provider_key(
+    config: ConfigureProviderRequest,
+    user: User = Depends(require_auth),
+):
+    """Validate an API key and return available models without saving."""
+    try:
+        provider = get_provider(
+            provider_type=config.provider,
+            api_key=config.api_key,
+            base_url=config.base_url,
+        )
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+    is_valid, error = provider.validate_key()
+    if not is_valid:
+        return {"valid": False, "error": error, "models": []}
+    
+    models = provider.list_models()
+    return {"valid": True, "models": models, "provider": config.provider}
+
+
+@router.post("/providers/remove")
+async def remove_provider(
+    request: dict,
+    user: User = Depends(require_auth),
+):
+    """Remove a configured provider and wipe its API key from memory."""
+    global _active_provider_type, _active_model
+    
+    provider_type = request.get("provider")
+    if not provider_type:
+        raise HTTPException(status_code=400, detail="provider is required")
+    
+    with _config_lock:
+        if provider_type in _providers:
+            # Wipe the key
+            p = _providers[provider_type]["provider"]
+            if hasattr(p, 'api_key'):
+                p.api_key = None
+            if hasattr(p, '_client'):
+                p._client = None
+            del _providers[provider_type]
+        
+        # If we removed the active provider, switch to another or clear
+        if _active_provider_type == provider_type:
+            if _providers:
+                _active_provider_type = next(iter(_providers))
+                _active_model = _providers[_active_provider_type]["default_model"]
+            else:
+                _active_provider_type = None
+                _active_model = None
+    
+    return {"success": True}
+
+
+@router.get("/providers")
+async def list_configured_providers(user: User = Depends(require_auth)):
+    """List all configured providers with their models (without exposing keys)."""
+    from .ai.providers import PROVIDER_INFO
+    
+    with _config_lock:
+        configured = {}
+        for ptype, pconfig in _providers.items():
+            configured[ptype] = {
+                "configured": True,
+                "models": pconfig["models"],
+                "default_model": pconfig["default_model"],
+                "info": PROVIDER_INFO.get(ptype, {}),
+            }
+        
+        return {
+            "providers": configured,
+            "active_provider": _active_provider_type,
+            "active_model": _active_model,
+            "available_providers": {
+                k: v for k, v in PROVIDER_INFO.items()
+            },
+        }
 
 
 @router.get("/config")
 async def get_ai_config(user: User = Depends(require_auth)):
-    """Get AI configuration for the current user."""
-    config = _user_configs.get(user.id)
-    if not config:
-        return {"configured": False}
-    
-    # Don't send the API key back to the client
-    return {
-        "configured": True,
-        "provider": config.provider,
-        "model": config.model,
-        "base_url": config.base_url,
-        "temperature": config.temperature,
-        "max_tokens": config.max_tokens,
-        "has_api_key": bool(config.api_key),
-        "has_mcp_config": bool(config.mcp_config)
-    }
+    """Get current AI configuration status."""
+    with _config_lock:
+        return {
+            "configured": len(_providers) > 0,
+            "provider": _active_provider_type,
+            "model": _active_model,
+            "auto_analyze": _global_settings["auto_analyze"],
+            "provider_count": len(_providers),
+        }
 
+
+@router.post("/set-active")
+async def set_active_provider(
+    request: SetActiveRequest,
+    user: User = Depends(require_auth),
+):
+    """Set the active provider and model for chat."""
+    global _active_provider_type, _active_model
+    
+    with _config_lock:
+        if request.provider not in _providers:
+            raise HTTPException(status_code=400, detail=f"Provider '{request.provider}' not configured")
+        
+        _active_provider_type = request.provider
+        _active_model = request.model
+    
+    return {"success": True, "provider": request.provider, "model": request.model}
+
+
+@router.post("/disconnect")
+async def disconnect_all(user: User = Depends(require_auth)):
+    """Disconnect all providers and wipe all keys from memory."""
+    global _active_provider_type, _active_model, _auto_analyze_running
+    
+    with _config_lock:
+        for ptype, pconfig in _providers.items():
+            p = pconfig["provider"]
+            if hasattr(p, 'api_key'):
+                p.api_key = None
+            if hasattr(p, '_client'):
+                p._client = None
+        _providers.clear()
+        _active_provider_type = None
+        _active_model = None
+    
+    _auto_analyze_running = False
+    _chat_history.clear()
+    _auto_insights.clear()
+    usage_tracker.reset()
+    
+    return {"success": True, "message": "All AI providers disconnected. Keys wiped from memory."}
+
+
+@router.post("/toggle-auto-analyze")
+async def toggle_auto_analyze(
+    request: dict,
+    user: User = Depends(require_auth),
+):
+    """Toggle auto-analyze on/off."""
+    enabled = request.get("enabled", True)
+    with _config_lock:
+        _global_settings["auto_analyze"] = enabled
+    if enabled:
+        _start_auto_analyze()
+    return {"success": True, "auto_analyze": enabled}
+
+
+# =============================================================================
+# Chat Endpoint
+# =============================================================================
 
 @router.post("/chat")
 async def chat(
     request: ChatRequest,
-    user: User = Depends(require_auth)
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db),
 ):
     """
-    Send a message to the AI assistant for analysis.
-    
-    The AI can help with:
-    - Security analysis of HL7 traffic
-    - Pentesting strategy recommendations
-    - Vulnerability assessment
-    - Attack vector brainstorming
-    - PII exposure analysis
+    Send a message to the AI with full project context.
+    Optionally accepts provider/model override in the request.
     """
-    config = _user_configs.get(user.id)
-    if not config:
+    provider = _get_active_provider()
+    model = _get_active_model()
+    
+    if not provider or not model:
         raise HTTPException(
             status_code=400,
-            detail="AI not configured. Please add your API key first."
+            detail="No AI provider configured. Go to Settings to add one."
         )
     
-    try:
-        # Build system prompt with context
-        system_prompt = build_system_prompt(request.context)
-        
-        # Call the appropriate AI provider
-        if config.provider == "openai":
-            response = await call_openai(config, system_prompt, request.message, request.history)
-        elif config.provider == "anthropic":
-            response = await call_anthropic(config, system_prompt, request.message, request.history)
-        elif config.provider == "custom":
-            response = await call_custom(config, system_prompt, request.message, request.history)
-        else:
-            raise HTTPException(status_code=400, detail="Unsupported AI provider")
-        
-        return {
-            "success": True,
-            "response": response,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/projects/{project_id}/analyze")
-async def analyze_project(
-    project_id: str,
-    request: Dict[str, Any],
-    user: User = Depends(require_auth),
-    db: Session = Depends(get_db)
-):
-    """
-    Analyze a project using AI.
-    
-    Provides context-aware analysis including:
-    - PCAP analysis results
-    - PII findings
-    - Fuzzing results
-    - Security recommendations
-    """
-    # Verify project ownership
+    # Verify project access
     project = db.query(Project).filter(
-        Project.id == project_id,
-        Project.owner_id == user.id
+        Project.id == request.project_id,
+        Project.owner_id == user.id,
     ).first()
     
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    config = _user_configs.get(user.id)
-    if not config:
-        raise HTTPException(
-            status_code=400,
-            detail="AI not configured. Please add your API key first."
-        )
+    # Build context
+    context = ""
+    if request.include_context:
+        context = context_engine.build_context(request.project_id, db, include_full_logs=True)
     
-    # Gather project context
-    context = gather_project_context(project, db)
-    
-    # Build analysis prompt
-    analysis_type = request.get("type", "comprehensive")
-    prompt = build_analysis_prompt(analysis_type, context)
-    
-    try:
-        if config.provider == "openai":
-            response = await call_openai(config, build_system_prompt(context), prompt, [])
-        elif config.provider == "anthropic":
-            response = await call_anthropic(config, build_system_prompt(context), prompt, [])
-        elif config.provider == "custom":
-            response = await call_custom(config, build_system_prompt(context), prompt, [])
-        else:
-            raise HTTPException(status_code=400, detail="Unsupported AI provider")
-        
-        return {
-            "success": True,
-            "analysis": response,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-def build_system_prompt(context: Optional[Dict[str, Any]] = None) -> str:
-    """Build system prompt with comprehensive context including all logs and traffic data."""
-    base_prompt = """You are a medical device security expert specializing in HL7 protocol analysis and penetration testing. 
-You have deep knowledge of:
-- HL7 v2.x and FHIR protocols
-- MLLP (Minimum Lower Layer Protocol)
-- Healthcare data security and HIPAA compliance
-- Medical device vulnerabilities
-- PII detection and data privacy
-- Network security and traffic analysis
-- Fuzzing and vulnerability testing
-
-Your role is to:
-1. Analyze security findings from PCAP traffic captures, including packet details, connections, and message content
-2. Review HL7 message logs, including segments, fields, and PII exposure
-3. Identify potential vulnerabilities in HL7 implementations based on traffic patterns and server responses
-4. Analyze fuzzing results, findings, and error patterns
-5. Review client-server interactions and message exchanges
-6. Suggest attack vectors and pentesting strategies based on observed behavior
-7. Provide recommendations for security improvements
-8. Help identify PII exposure, data leakage, and compliance issues
-9. Brainstorm creative testing approaches tailored to the specific environment
-
-You have access to:
-- Complete PCAP analysis results with traffic details, connections, and encryption status
-- All HL7 messages captured with full segment data
-- PII findings with entity types, values, scores, and locations
-- Fuzzing job configurations, results, and findings
-- Server message logs with client interactions
-- Client session histories with sent/received messages and responses
-
-Always provide actionable, specific advice tailored to the actual data observed in this project. Reference specific findings, messages, connections, or patterns when making recommendations."""
-    
+    # Build system prompt with context
+    full_system = SYSTEM_PROMPT
     if context:
-        # Create a more structured context summary
-        context_summary = f"""
-
-=== PROJECT CONTEXT ===
-Project: {context.get('project_name', 'Unknown')}
-Description: {context.get('project_description', 'N/A')}
-Status: {context.get('status', 'unknown')}
-Engagement Period: {context.get('engagement_period', {}).get('start', 'N/A')} to {context.get('engagement_period', {}).get('end', 'N/A')}
-
-=== SUMMARY ===
-- PCAP Analyses: {context.get('summary', {}).get('total_pcap_analyses', 0)}
-- Fuzzing Jobs: {context.get('summary', {}).get('total_fuzzing_jobs', 0)}
-- Servers: {context.get('summary', {}).get('total_servers', 0)}
-- Client Sessions: {context.get('summary', {}).get('total_client_sessions', 0)}
-
-=== DETAILED DATA ===
-The following data includes all traffic captures, logs, messages, and findings from this project.
-Use this data to provide specific, evidence-based security analysis.
-
-"""
-        base_prompt += context_summary + json.dumps(context, indent=2)
+        full_system += f"\n\n## Current Project Context\n{context}"
     
-    return base_prompt
-
-
-def build_analysis_prompt(analysis_type: str, context: Dict[str, Any]) -> str:
-    """Build specific analysis prompts."""
-    prompts = {
-        "comprehensive": "Provide a comprehensive security analysis of this project, including all findings, vulnerabilities, and recommendations.",
-        "pii": "Focus on PII (Personally Identifiable Information) exposure. Analyze what sensitive data was found and assess the privacy risks.",
-        "vulnerabilities": "Identify potential vulnerabilities based on the traffic patterns, message formats, and server responses observed.",
-        "attack_vectors": "Suggest creative attack vectors and pentesting strategies for this medical device configuration.",
-        "recommendations": "Provide prioritized security recommendations for hardening this system."
-    }
+    # Get or create chat history for this project
+    if request.project_id not in _chat_history:
+        _chat_history[request.project_id] = []
     
-    return prompts.get(analysis_type, prompts["comprehensive"])
-
-
-def gather_project_context(project: Project, db: Session) -> Dict[str, Any]:
-    """Gather comprehensive project context for AI analysis including all logs and traffic data."""
-    context = {
-        "project_name": project.name,
-        "project_description": project.description,
-        "engagement_period": {
-            "start": project.engagement_start.isoformat() if project.engagement_start else None,
-            "end": project.engagement_end.isoformat() if project.engagement_end else None
-        },
-        "created_at": project.created_at.isoformat() if project.created_at else None,
-        "status": project.status,
-        "pcap_analyses": [],
-        "fuzzing_jobs": [],
-        "servers": [],
-        "client_sessions": [],
-        "summary": {
-            "total_pcap_analyses": len(project.pcap_analyses),
-            "total_fuzzing_jobs": len(project.fuzzing_jobs),
-            "total_servers": len(project.server_instances),
-            "total_client_sessions": len(project.client_sessions)
-        }
-    }
+    history = _chat_history[request.project_id]
     
-    # Add detailed PCAP analysis results with full traffic data
-    for analysis in project.pcap_analyses[:20]:  # Last 20 analyses
-        pcap_data = {
-            "id": analysis.id,
-            "filename": analysis.filename,
-            "file_size": analysis.file_size,
-            "total_packets": analysis.total_packets,
-            "hl7_messages": analysis.hl7_message_count,
-            "pii_count": analysis.pii_count,
-            "encryption_status": analysis.encryption_status,
-            "created_at": analysis.created_at.isoformat() if analysis.created_at else None,
-        }
-        
-        # Include detailed results if available
-        if analysis.results:
-            results = analysis.results
-            pcap_data["traffic_summary"] = {
-                "encrypted_packets": results.get("encrypted_packets", 0),
-                "unencrypted_packets": results.get("unencrypted_packets", 0),
-                "total_connections": len(results.get("connections", [])),
-                "unique_hosts": len(set([
-                    conn.get("src") for conn in results.get("connections", [])
-                ] + [
-                    conn.get("dst") for conn in results.get("connections", [])
-                ])) if results.get("connections") else 0
-            }
-            
-            # Include connection details (limited)
-            if results.get("connections"):
-                pcap_data["connections"] = results["connections"][:50]  # First 50 connections
-            
-            # Include HL7 messages (limited)
-            if results.get("hl7_messages"):
-                pcap_data["hl7_messages"] = [
-                    {
-                        "timestamp": msg.get("timestamp"),
-                        "src": msg.get("src"),
-                        "dst": msg.get("dst"),
-                        "message_type": msg.get("message_type"),
-                        "segments": msg.get("segments", [])[:5],  # First 5 segments
-                        "has_pii": len(msg.get("pii", [])) > 0,
-                        "pii_count": len(msg.get("pii", []))
-                    }
-                    for msg in results["hl7_messages"][:20]  # First 20 messages
-                ]
-            
-            # Include PII findings with full details
-            if results.get("pii_instances"):
-                pcap_data["pii_findings"] = [
-                    {
-                        "type": pii.get("entity_type"),
-                        "value": pii.get("value"),
-                        "score": pii.get("score"),
-                        "location": pii.get("location"),
-                        "timestamp": pii.get("timestamp")
-                    }
-                    for pii in results["pii_instances"][:100]  # First 100 PII instances
-                ]
-        
-        context["pcap_analyses"].append(pcap_data)
+    # Add user message
+    history.append({"role": "user", "content": request.message})
     
-    # Add comprehensive fuzzing job results with findings
-    for job in project.fuzzing_jobs[:10]:  # Last 10 jobs
-        job_data = {
-            "id": job.id,
-            "name": job.name,
-            "status": job.status,
-            "target": f"{job.target_host}:{job.target_port}",
-            "use_tls": job.use_tls,
-            "progress": job.progress,
-            "total_requests": job.total_requests,
-            "successful_requests": job.successful_requests,
-            "error_requests": job.error_requests,
-            "interesting_findings": job.interesting_findings,
-            "started_at": job.started_at.isoformat() if job.started_at else None,
-            "completed_at": job.completed_at.isoformat() if job.completed_at else None
-        }
-        
-        # Include fuzzing configuration
-        if job.config_content:
-            job_data["config_preview"] = job.config_content[:500]  # First 500 chars
-        
-        # Include findings with details
-        if job.findings:
-            job_data["findings"] = job.findings[:50]  # First 50 findings
-        
-        # Include sample results
-        if job.results:
-            job_data["sample_results"] = job.results[:30]  # First 30 results
-        
-        context["fuzzing_jobs"].append(job_data)
+    # Keep history manageable (last 20 messages)
+    if len(history) > 20:
+        history = history[-20:]
+        _chat_history[request.project_id] = history
     
-    # Add server instances with message logs
-    for server in project.server_instances[:10]:
-        server_data = {
-            "id": server.id,
-            "name": server.name,
-            "host": server.host,
-            "port": server.port,
-            "use_tls": server.use_tls,
-            "status": server.status,
-            "total_connections": server.total_connections,
-            "total_messages": server.total_messages,
-            "created_at": server.created_at.isoformat() if server.created_at else None
-        }
-        
-        # Include message logs if available
-        if server.message_log:
-            server_data["recent_messages"] = server.message_log[-100:]  # Last 100 messages
-            server_data["message_summary"] = {
-                "total_logged": len(server.message_log),
-                "message_types": list(set([
-                    msg.get("message_type") for msg in server.message_log
-                    if msg.get("message_type")
-                ])),
-                "recent_connections": list(set([
-                    msg.get("client_address") for msg in server.message_log[-50:]
-                    if msg.get("client_address")
-                ]))
-            }
-        
-        context["servers"].append(server_data)
+    # Send to AI
+    response = provider.chat(
+        messages=history,
+        system_prompt=full_system,
+        model=model,
+        max_tokens=4096,
+        temperature=0.3,
+    )
     
-    # Add client session history with messages
-    for session in project.client_sessions[:10]:  # Last 10 sessions
-        session_data = {
-            "id": session.id,
-            "target": f"{session.target_host}:{session.target_port}",
-            "use_tls": session.use_tls,
-            "status": session.status,
-            "message_count": len(session.message_history) if session.message_history else 0,
-            "created_at": session.created_at.isoformat() if session.created_at else None,
-            "updated_at": session.updated_at.isoformat() if session.updated_at else None
-        }
-        
-        # Include message history (last 50 messages)
-        if session.message_history:
-            session_data["message_history"] = session.message_history[-50:]
-            session_data["message_summary"] = {
-                "total_sent": len([m for m in session.message_history if m.get("direction") == "sent"]),
-                "total_received": len([m for m in session.message_history if m.get("direction") == "received"]),
-                "errors": len([m for m in session.message_history if m.get("error")])
-            }
-        
-        context["client_sessions"].append(session_data)
+    if response.error:
+        raise HTTPException(status_code=500, detail=f"AI error: {response.error}")
     
-    return context
-
-
-async def call_openai(config: AIConfig, system_prompt: str, message: str, history: List[ChatMessage]) -> str:
-    """Call OpenAI API."""
-    try:
-        import openai
-        
-        client = openai.OpenAI(
-            api_key=config.api_key,
-            base_url=config.base_url if config.base_url else None
-        )
-        
-        messages = [{"role": "system", "content": system_prompt}]
-        
-        # Add history
-        for msg in history[-10:]:  # Last 10 messages
-            messages.append({"role": msg.role, "content": msg.content})
-        
-        # Add current message
-        messages.append({"role": "user", "content": message})
-        
-        response = client.chat.completions.create(
-            model=config.model or "gpt-4",
-            messages=messages,
-            temperature=config.temperature,
-            max_tokens=config.max_tokens
-        )
-        
-        return response.choices[0].message.content
-        
-    except ImportError:
-        raise HTTPException(
-            status_code=500,
-            detail="OpenAI library not installed. Run: pip install openai"
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"OpenAI API error: {str(e)}")
-
-
-async def call_anthropic(config: AIConfig, system_prompt: str, message: str, history: List[ChatMessage]) -> str:
-    """Call Anthropic Claude API."""
-    try:
-        import anthropic
-        
-        client = anthropic.Anthropic(api_key=config.api_key)
-        
-        messages = []
-        
-        # Add history
-        for msg in history[-10:]:
-            if msg.role != "system":
-                messages.append({"role": msg.role, "content": msg.content})
-        
-        # Add current message
-        messages.append({"role": "user", "content": message})
-        
-        response = client.messages.create(
-            model=config.model or "claude-3-5-sonnet-20241022",
-            system=system_prompt,
-            messages=messages,
-            temperature=config.temperature,
-            max_tokens=config.max_tokens
-        )
-        
-        return response.content[0].text
-        
-    except ImportError:
-        raise HTTPException(
-            status_code=500,
-            detail="Anthropic library not installed. Run: pip install anthropic"
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Anthropic API error: {str(e)}")
-
-
-async def call_custom(config: AIConfig, system_prompt: str, message: str, history: List[ChatMessage]) -> str:
-    """Call custom OpenAI-compatible API."""
-    if not config.base_url:
-        raise HTTPException(status_code=400, detail="Custom provider requires base_url")
+    # Record usage
+    usage_tracker.record(response.usage)
     
-    # Use OpenAI client with custom base URL
-    return await call_openai(config, system_prompt, message, history)
+    # Add assistant response to history
+    history.append({"role": "assistant", "content": response.content})
+    
+    return response.to_dict()
 
 
-@router.get("/providers")
-async def get_providers(user: User = Depends(require_auth)):
-    """Get list of supported AI providers."""
+@router.post("/clear-history")
+async def clear_chat_history(
+    request: dict,
+    user: User = Depends(require_auth),
+):
+    """Clear chat history for a project."""
+    project_id = request.get("project_id")
+    if project_id and project_id in _chat_history:
+        _chat_history[project_id] = []
+    return {"success": True}
+
+
+# =============================================================================
+# Auto-Analysis & Insights
+# =============================================================================
+
+@router.get("/insights/{project_id}")
+async def get_insights(
+    project_id: str,
+    user: User = Depends(require_auth),
+):
+    """Get auto-generated insights for a project."""
+    insights = _auto_insights.get(project_id, [])
+    
+    # Return last 10 insights
     return {
-        "providers": [
-            {
-                "id": "openai",
-                "name": "OpenAI",
-                "models": ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"],
-                "requires_api_key": True,
-                "supports_custom_url": True
-            },
-            {
-                "id": "anthropic",
-                "name": "Anthropic Claude",
-                "models": ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-sonnet-20240229"],
-                "requires_api_key": True,
-                "supports_custom_url": False
-            },
-            {
-                "id": "custom",
-                "name": "Custom (OpenAI-compatible)",
-                "models": [],
-                "requires_api_key": True,
-                "supports_custom_url": True,
-                "description": "Any OpenAI-compatible API (Ollama, LM Studio, etc.)"
-            }
-        ]
+        "insights": insights[-10:],
+        "total": len(insights),
     }
 
 
-@router.get("/suggestions")
-async def get_suggestions(user: User = Depends(require_auth)):
-    """Get AI prompt suggestions for pentesting."""
-    return {
-        "categories": [
-            {
-                "name": "Vulnerability Analysis",
-                "prompts": [
-                    "What vulnerabilities might exist in this HL7 implementation?",
-                    "Analyze the encryption status and suggest attack vectors",
-                    "What are the top 5 security risks based on these findings?",
-                    "How could an attacker exploit the PII exposure found?"
-                ]
-            },
-            {
-                "name": "Fuzzing Strategy",
-                "prompts": [
-                    "Suggest fuzzing test cases for this HL7 server",
-                    "What message fields should I fuzz first?",
-                    "Generate malformed HL7 messages for testing",
-                    "How can I test for buffer overflow vulnerabilities?"
-                ]
-            },
-            {
-                "name": "Traffic Analysis",
-                "prompts": [
-                    "Analyze these PCAP results and identify anomalies",
-                    "What does the message flow pattern reveal?",
-                    "Are there any suspicious connection patterns?",
-                    "Summarize the security posture of this traffic"
-                ]
-            },
-            {
-                "name": "PII & Compliance",
-                "prompts": [
-                    "What PII is exposed and how critical is it?",
-                    "Are there any HIPAA compliance violations?",
-                    "How should this data be encrypted?",
-                    "What's the privacy risk level?"
-                ]
-            },
-            {
-                "name": "Pentest Planning",
-                "prompts": [
-                    "Create a pentest plan for this medical device",
-                    "What tools should I use for testing?",
-                    "Suggest a testing methodology",
-                    "What are creative attack scenarios to explore?"
-                ]
-            }
-        ]
+@router.post("/analyze-now")
+async def analyze_now(
+    request: dict,
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Trigger an immediate analysis of the current project state.
+    Useful for getting a status overview on demand.
+    """
+    project_id = request.get("project_id")
+    if not project_id:
+        raise HTTPException(status_code=400, detail="project_id is required")
+
+    provider = _get_active_provider()
+    model = _get_active_model()
+    
+    if not provider or not model:
+        raise HTTPException(status_code=400, detail="No AI provider configured. Go to Settings to add one.")
+    
+    # Build full context
+    context = context_engine.build_context(project_id, db, include_full_logs=True)
+    
+    full_system = SYSTEM_PROMPT
+    messages = [
+        {
+            "role": "user",
+            "content": f"{CONTEXT_SUMMARY_PROMPT}\n\n{context}"
+        }
+    ]
+    
+    response = provider.chat(
+        messages=messages,
+        system_prompt=full_system,
+        model=model,
+        max_tokens=2048,
+        temperature=0.2,
+    )
+    
+    if response.error:
+        raise HTTPException(status_code=500, detail=f"AI error: {response.error}")
+    
+    usage_tracker.record(response.usage)
+    
+    # Store as insight
+    insight = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "type": "manual_analysis",
+        "content": response.content,
+        "actions": response.actions,
+        "insights": response.insights,
+        "usage": {
+            "input_tokens": response.usage.input_tokens,
+            "output_tokens": response.usage.output_tokens,
+            "cost_usd": response.usage.estimated_cost_usd,
+        }
     }
+    
+    if project_id not in _auto_insights:
+        _auto_insights[project_id] = []
+    _auto_insights[project_id].append(insight)
+    
+    return response.to_dict()
+
+
+# =============================================================================
+# Action Execution
+# =============================================================================
+
+@router.post("/execute-action")
+async def execute_action(
+    request: ExecuteActionRequest,
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Execute an AI-suggested action.
+    
+    Supported action types:
+    - send_payload: Send an HL7 message to a target
+    - start_fuzzer: Start a fuzzing job with given config
+    - start_server: Start an HL7 server
+    - upload_pcap: Trigger PCAP analysis (requires file)
+    """
+    action_type = request.action_type
+    data = request.action_data
+    project_id = request.project_id
+    
+    # Verify project access
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.owner_id == user.id,
+    ).first()
+    
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    try:
+        if action_type == "send_payload":
+            result = await _execute_send_payload(data, db)
+        elif action_type == "start_fuzzer":
+            result = await _execute_start_fuzzer(data, project_id, user, db)
+        elif action_type == "start_server":
+            result = await _execute_start_server(data, project_id, user, db)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown action type: {action_type}"
+            )
+        
+        # Log the action as an event
+        context_engine.add_event(
+            module="ai",
+            event_type="action_executed",
+            data={
+                "action_type": action_type,
+                "result": "success",
+                "details": str(result)[:200],
+            }
+        )
+        
+        return {"success": True, "result": result}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Action execution failed: {e}")
+        context_engine.add_event(
+            module="ai",
+            event_type="action_failed",
+            data={
+                "action_type": action_type,
+                "error": str(e),
+            }
+        )
+        raise HTTPException(status_code=500, detail=f"Action failed: {str(e)}")
+
+
+async def _execute_send_payload(data: dict, db: Session) -> dict:
+    """Execute a send_payload action."""
+    from .client_api import send_hl7_message, format_message
+    
+    target_host = data.get("target_host", "localhost")
+    target_port = int(data.get("target_port", 2575))
+    message = data.get("message", "")
+    use_tls = data.get("use_tls", False)
+    
+    if not message:
+        raise HTTPException(status_code=400, detail="Message is required")
+    
+    formatted = format_message(message)
+    result = send_hl7_message(target_host, target_port, formatted, use_tls)
+    
+    # Log as client event
+    context_engine.add_event(
+        module="client",
+        event_type="payload_sent",
+        data={
+            "target": f"{target_host}:{target_port}",
+            "response_status": "success" if result.get("success") else "error",
+            "message_preview": message[:100],
+        }
+    )
+    
+    return result
+
+
+async def _execute_start_fuzzer(data: dict, project_id: str, user, db: Session) -> dict:
+    """Execute a start_fuzzer action."""
+    from .fuzzer_api import create_fuzzing_job
+    from medaudit.fuzzer import parse_fuzzing_config
+    from medaudit.fuzzer.engine import validate_config
+    
+    config_content = data.get("config", "")
+    name = data.get("label", "AI-suggested fuzzing")
+    
+    if not config_content:
+        raise HTTPException(status_code=400, detail="Fuzzing config is required")
+    
+    # Parse and validate
+    config = parse_fuzzing_config(config_content, "yaml")
+    is_valid, errors = validate_config(config)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=f"Invalid config: {'; '.join(errors)}")
+    
+    # Create the job
+    from .database import FuzzingJob, get_db_manager
+    import threading
+    from medaudit.fuzzer import run_fuzzing_job
+    
+    job = FuzzingJob(
+        project_id=project_id,
+        name=name,
+        target_host=config.get("target_host", "localhost"),
+        target_port=config.get("target_port", 2575),
+        use_tls=config.get("use_tls", False),
+        config_format="yaml",
+        config_content=config_content,
+        status="pending",
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    
+    db_manager = get_db_manager()
+    thread = threading.Thread(
+        target=run_fuzzing_job,
+        args=(job.id, config, db_manager.SessionLocal),
+        daemon=True,
+    )
+    thread.start()
+    
+    context_engine.add_event(
+        module="fuzzer",
+        event_type="started",
+        data={"name": name, "target": f"{config.get('target_host')}:{config.get('target_port')}"}
+    )
+    
+    return {"job_id": job.id, "status": "started"}
+
+
+async def _execute_start_server(data: dict, project_id: str, user, db: Session) -> dict:
+    """Execute a start_server action."""
+    from .database import ServerInstance, get_db_manager
+    from .server_api import run_server
+    import threading
+    
+    port = int(data.get("port", 2575))
+    name = data.get("name", f"AI Server (port {port})")
+    
+    server = ServerInstance(
+        project_id=project_id,
+        name=name,
+        host="0.0.0.0",
+        port=port,
+        use_tls=False,
+    )
+    db.add(server)
+    db.commit()
+    db.refresh(server)
+    
+    db_manager = get_db_manager()
+    config = {"host": "0.0.0.0", "port": port, "use_tls": False}
+    
+    thread = threading.Thread(
+        target=run_server,
+        args=(server.id, config, db_manager.SessionLocal),
+        daemon=True,
+    )
+    thread.start()
+    
+    time.sleep(0.5)
+    
+    context_engine.add_event(
+        module="server",
+        event_type="server",
+        data={"action": "started", "port": port, "name": name}
+    )
+    
+    return {"server_id": server.id, "port": port, "status": "started"}
+
+
+# =============================================================================
+# Usage Tracking
+# =============================================================================
+
+@router.get("/usage")
+async def get_usage(user: User = Depends(require_auth)):
+    """Get token usage statistics for the current session."""
+    return usage_tracker.get_session_totals()
+
+
+@router.post("/usage/reset")
+async def reset_usage(user: User = Depends(require_auth)):
+    """Reset usage tracking."""
+    usage_tracker.reset()
+    return {"success": True}
+
+
+# =============================================================================
+# Auto-Analyze Background Worker
+# =============================================================================
+
+def _start_auto_analyze():
+    """Start the background auto-analyze thread."""
+    global _auto_analyze_thread, _auto_analyze_running
+    
+    if _auto_analyze_running:
+        return
+    
+    _auto_analyze_running = True
+    _auto_analyze_thread = threading.Thread(target=_auto_analyze_worker, daemon=True)
+    _auto_analyze_thread.start()
+    logger.info("Auto-analyze background worker started")
+
+
+def _auto_analyze_worker():
+    """Background worker that periodically analyzes new events."""
+    global _auto_analyze_running
+    
+    while _auto_analyze_running:
+        try:
+            time.sleep(5)  # Check every 5 seconds
+            
+            with _config_lock:
+                if not _global_settings["auto_analyze"] or not _providers:
+                    continue
+            
+            provider = _get_active_provider()
+            model = _get_active_model()
+            
+            if not provider or not context_engine.should_auto_analyze():
+                continue
+            
+            # Get unprocessed events
+            events = context_engine.get_unprocessed_events()
+            if not events:
+                continue
+            
+            # Only analyze if there are meaningful events (skip noise)
+            meaningful = [
+                e for e in events
+                if e.get("event_type") not in ("connection",)  # Skip connection events alone
+            ]
+            if not meaningful:
+                context_engine.mark_analyzed()
+                continue
+            
+            # Build event context
+            event_context = context_engine.build_event_context(events)
+            
+            # Send to AI for analysis
+            messages = [
+                {"role": "user", "content": f"{AUTO_ANALYZE_PROMPT}\n\n{event_context}"}
+            ]
+            
+            response = provider.chat(
+                messages=messages,
+                system_prompt=SYSTEM_PROMPT,
+                model=model,
+                max_tokens=1024,
+                temperature=0.2,
+            )
+            
+            if not response.error and response.content:
+                usage_tracker.record(response.usage)
+                
+                insight = {
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "type": "auto_analysis",
+                    "content": response.content,
+                    "actions": response.actions,
+                    "insights": response.insights,
+                    "event_count": len(events),
+                    "usage": {
+                        "input_tokens": response.usage.input_tokens,
+                        "output_tokens": response.usage.output_tokens,
+                        "cost_usd": response.usage.estimated_cost_usd,
+                    }
+                }
+                
+                # Store insight for all active projects
+                # (In practice, events should be project-scoped)
+                for project_id in _chat_history.keys():
+                    if project_id not in _auto_insights:
+                        _auto_insights[project_id] = []
+                    _auto_insights[project_id].append(insight)
+                    
+                    # Keep manageable
+                    if len(_auto_insights[project_id]) > 50:
+                        _auto_insights[project_id] = _auto_insights[project_id][-50:]
+            
+            context_engine.mark_analyzed()
+            
+        except Exception as e:
+            logger.error(f"Auto-analyze error: {e}")
+            time.sleep(10)  # Back off on error
