@@ -1,0 +1,48 @@
+# Git
+.git
+.github
+
+# Python
+__pycache__
+*.py[cod]
+*.egg-info
+.eggs
+dist
+build
+*.egg
+
+# Virtual environments
+venv
+.venv
+env
+ENV
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Runtime data (regenerated at startup)
+medaudit/data/*.db
+medaudit/data/artifacts
+medaudit/logs
+logs
+
+# Test artifacts
+tests/logs
+tests/results
+tests/.pytest_cache
+htmlcov
+.coverage
+.pytest_cache
+.mypy_cache
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
