@@ -163,6 +163,12 @@ async def dashboard_page(request: Request):
     return templates.TemplateResponse("dashboard.html", {"request": request})
 
 
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    """Serve the settings page."""
+    return templates.TemplateResponse("settings.html", {"request": request})
+
+
 @app.get("/project/{project_id}", response_class=HTMLResponse)
 async def project_page(request: Request, project_id: str):
     """Serve the project view page."""
@@ -213,13 +219,7 @@ def start_web_server(
     finally:
         db.close()
     
-    # SECURITY: Mask password for display (show only first 4 and last 2 chars)
-    if len(password) > 8:
-        masked_password = password[:4] + "*" * (len(password) - 6) + password[-2:]
-    else:
-        masked_password = password[:2] + "*" * (len(password) - 2)
-    
-    # Display startup message
+    # Display startup message with full password visible for copy
     print(f"""
 ╔═══════════════════════════════════════════════════════════╗
 ║             MEDAUDIT 2.0 - Security Audit Platform        ║
@@ -227,18 +227,11 @@ def start_web_server(
 ║  Web UI:     http://{host}:{port:<5}                          ║
 ║  API Docs:   http://{host}:{port:<5}/docs                     ║
 ║                                                           ║
-║  Default Admin Credentials:                               ║
+║  Admin Login:                                             ║
 ║    Username: admin                                        ║
-║    Password: {masked_password:<44}║
-║                                                           ║
-║  NOTE: Change default password for production use!        ║
-║  Use --password or --generate-password flags on startup.  ║
+║    Password: {password:<44}║
 ╚═══════════════════════════════════════════════════════════╝
 """)
-    
-    # Print full password once (to stderr to avoid log capture)
-    import sys
-    print(f"\n  [!] Admin Password: {password}\n", file=sys.stderr)
     
     uvicorn.run(app, host=host, port=port)
 

@@ -78,6 +78,75 @@
         .conn-table th { background: #f8fafc; padding: 0.75rem; text-align: left; font-weight: 600; border-bottom: 2px solid #e2e8f0; }
         .conn-table td { padding: 0.75rem; border-bottom: 1px solid #e2e8f0; }
         .conn-table tr:hover { background: #f8fafc; }
+        
+        /* AI Sidebar Styles */
+        .ai-sidebar-toggle {
+            position: fixed; right: 20px; bottom: 20px; z-index: 1050;
+            width: 56px; height: 56px; border-radius: 50%;
+            background: linear-gradient(135deg, #8b5cf6, #6366f1);
+            color: #fff; border: none; box-shadow: 0 4px 12px rgba(99,102,241,0.4);
+            font-size: 1.4rem; cursor: pointer; transition: all 0.3s;
+        }
+        .ai-sidebar-toggle:hover { transform: scale(1.1); box-shadow: 0 6px 20px rgba(99,102,241,0.5); }
+        .ai-badge {
+            position: absolute; top: -2px; right: -2px; background: #dc2626; color: #fff;
+            border-radius: 50%; width: 20px; height: 20px; font-size: 0.65rem;
+            display: flex; align-items: center; justify-content: center; font-weight: 700;
+        }
+        .ai-sidebar {
+            position: fixed; right: -420px; top: 0; width: 400px; height: 100vh;
+            background: #fff; box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+            z-index: 1040; display: flex; flex-direction: column;
+            transition: right 0.3s ease-in-out;
+        }
+        .ai-sidebar.open { right: 0; }
+        .ai-sidebar-header {
+            background: linear-gradient(135deg, #1e293b, #334155);
+            color: #fff; padding: 0.75rem 1rem;
+            display: flex; justify-content: space-between; align-items: center;
+            flex-shrink: 0;
+        }
+        .ai-config-section { border-bottom: 1px solid #e2e8f0; flex-shrink: 0; }
+        .ai-usage-bar { background: #f8fafc; border-bottom: 1px solid #e2e8f0; flex-shrink: 0; }
+        .ai-insights { border-bottom: 1px solid #e2e8f0; flex-shrink: 0; }
+        .ai-insights-header { background: #fef3c7; }
+        .ai-insights-feed { font-size: 0.8rem; }
+        .ai-insight-card {
+            padding: 0.5rem 0.75rem; border-bottom: 1px solid #f1f5f9;
+            font-size: 0.78rem; line-height: 1.3;
+        }
+        .ai-insight-card:hover { background: #f8fafc; }
+        .ai-chat-area {
+            flex: 1; overflow-y: auto; padding: 0.75rem;
+            background: #f8fafc; font-size: 0.85rem;
+        }
+        .ai-msg { margin-bottom: 0.75rem; display: flex; gap: 0.5rem; }
+        .ai-msg-user { justify-content: flex-end; }
+        .ai-msg-user .ai-msg-bubble { background: #3b82f6; color: #fff; border-radius: 12px 12px 0 12px; }
+        .ai-msg-assistant .ai-msg-bubble {
+            background: #fff; color: #1e293b; border: 1px solid #e2e8f0;
+            border-radius: 12px 12px 12px 0;
+        }
+        .ai-msg-bubble { padding: 0.6rem 0.8rem; max-width: 85%; font-size: 0.82rem; line-height: 1.4; word-wrap: break-word; }
+        .ai-msg-bubble pre { background: #1e293b; color: #a5f3fc; padding: 0.5rem; border-radius: 6px; font-size: 0.75rem; overflow-x: auto; margin: 0.5rem 0; }
+        .ai-msg-bubble code { background: rgba(0,0,0,0.08); padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.8em; }
+        .ai-action-btn {
+            display: inline-flex; align-items: center; gap: 0.3rem;
+            background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd;
+            border-radius: 6px; padding: 0.3rem 0.6rem; font-size: 0.75rem;
+            cursor: pointer; margin: 0.25rem 0.25rem 0 0; transition: all 0.2s;
+        }
+        .ai-action-btn:hover { background: #bfdbfe; border-color: #60a5fa; }
+        .ai-quick-actions { border-top: 1px solid #e2e8f0; flex-shrink: 0; }
+        .ai-chat-input { background: #fff; border-top: 1px solid #e2e8f0; flex-shrink: 0; }
+        .ai-typing { display: flex; gap: 4px; padding: 0.5rem; }
+        .ai-typing span { width: 6px; height: 6px; background: #94a3b8; border-radius: 50%; animation: typing 1.2s infinite; }
+        .ai-typing span:nth-child(2) { animation-delay: 0.2s; }
+        .ai-typing span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+        
+        /* Adjust main content when sidebar is open */
+        body.ai-sidebar-open .container-fluid { margin-right: 400px; transition: margin-right 0.3s; }
     </style>
 </head>
 <body>
@@ -120,12 +189,13 @@
                 <i class="bi bi-hdd-rack tab-icon"></i>Server
             </button>
         </li>
-        <li class="nav-item">
-            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#aiTab">
-                <i class="bi bi-chat-dots tab-icon"></i>Analyze with AI
-            </button>
-        </li>
     </ul>
+
+    <!-- AI Sidebar Toggle Button (persistent across tabs) -->
+    <button class="ai-sidebar-toggle" id="aiSidebarToggle" onclick="toggleAISidebar()" title="AI Pentest Assistant">
+        <i class="bi bi-robot"></i>
+        <span class="ai-badge" id="aiInsightBadge" style="display:none;">0</span>
+    </button>
 
     <div class="container-fluid">
         <div class="tab-content">
@@ -492,108 +562,93 @@
                 </div>
             </div>
 
-            <!-- AI ANALYSIS TAB -->
-            <div class="tab-pane fade" id="aiTab">
-                <div class="row">
-                    <div class="col-lg-4">
-                        <div class="card">
-                            <div class="card-header">AI Configuration</div>
-                            <div class="card-body">
-                                <div id="aiConfigStatus" class="alert alert-warning mb-3">
-                                    <i class="bi bi-exclamation-triangle"></i> AI not configured
-                                </div>
-                                <div class="mb-3">
-                                    <label>Provider</label>
-                                    <select class="form-control" id="aiProvider" onchange="updateProviderFields()">
-                                        <option value="">Select Provider...</option>
-                                        <option value="openai">OpenAI</option>
-                                        <option value="anthropic">Anthropic Claude</option>
-                                        <option value="custom">Custom (OpenAI-compatible)</option>
-                                    </select>
-                                </div>
-                                <div class="mb-3">
-                                    <label>API Key <i class="bi bi-info-circle" title="Your API key is stored in memory only and never saved to database"></i></label>
-                                    <input type="password" class="form-control" id="aiApiKey" placeholder="sk-...">
-                                    <small class="text-muted">Stored in memory only, not persisted</small>
-                                </div>
-                                <div class="mb-3">
-                                    <label>Model</label>
-                                    <input type="text" class="form-control" id="aiModel" placeholder="e.g., gpt-4, claude-3-5-sonnet-20241022">
-                                </div>
-                                <div class="mb-3" id="aiBaseUrlField" style="display: none;">
-                                    <label>Base URL</label>
-                                    <input type="text" class="form-control" id="aiBaseUrl" placeholder="http://localhost:11434/v1">
-                                    <small class="text-muted">For Ollama, LM Studio, etc.</small>
-                                </div>
-                                <div class="row">
-                                    <div class="col-6 mb-3">
-                                        <label>Temperature</label>
-                                        <input type="number" class="form-control" id="aiTemperature" value="0.7" min="0" max="2" step="0.1">
-                                    </div>
-                                    <div class="col-6 mb-3">
-                                        <label>Max Tokens</label>
-                                        <input type="number" class="form-control" id="aiMaxTokens" value="2000">
-                                    </div>
-                                </div>
-                                <button class="btn btn-primary btn-action w-100 mb-2" onclick="saveAIConfig()">
-                                    <i class="bi bi-check-circle me-1"></i>Save Configuration
-                                </button>
-                                <button class="btn btn-outline-secondary btn-action w-100" onclick="showMCPConfig()">
-                                    <i class="bi bi-gear me-1"></i>MCP Config (Advanced)
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="card">
-                            <div class="card-header">Quick Prompts</div>
-                            <div class="card-body" id="aiSuggestions">
-                                <div class="text-center text-muted py-3">
-                                    <small>Configure AI to see suggestions</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-lg-8">
-                        <div class="card">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <span>AI Analysis Chat</span>
-                                <button class="btn btn-sm btn-outline-secondary" onclick="clearChatHistory()">
-                                    <i class="bi bi-trash"></i> Clear
-                                </button>
-                            </div>
-                            <div class="card-body p-0">
-                                <div id="aiChatArea" style="height: 500px; overflow-y: auto; padding: 1rem; background: #f8fafc;">
-                                    <div class="text-center text-muted py-5">
-                                        <i class="bi bi-chat-dots" style="font-size: 3rem; opacity: 0.3;"></i>
-                                        <p class="mt-3">Start a conversation to analyze your security findings</p>
-                                        <p class="small">Ask about vulnerabilities, PII exposure, attack vectors, or pentesting strategies</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="card-footer" style="background: #fff;">
-                                <div class="input-group">
-                                    <textarea class="form-control" id="aiMessageInput" rows="2" placeholder="Ask about security findings, vulnerabilities, or pentesting strategies..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIMessage();}"></textarea>
-                                    <button class="btn btn-primary" onclick="sendAIMessage()" id="aiSendBtn">
-                                        <i class="bi bi-send"></i>
-                                    </button>
-                                </div>
-                                <div class="mt-2">
-                                    <button class="btn btn-sm btn-outline-primary me-1" onclick="analyzeProjectWithAI('comprehensive')">
-                                        <i class="bi bi-clipboard-check"></i> Comprehensive Analysis
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-warning me-1" onclick="analyzeProjectWithAI('vulnerabilities')">
-                                        <i class="bi bi-shield-exclamation"></i> Find Vulnerabilities
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger" onclick="analyzeProjectWithAI('attack_vectors')">
-                                        <i class="bi bi-lightning"></i> Attack Vectors
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+    <!-- AI SIDEBAR (persistent across all tabs) -->
+    <div class="ai-sidebar" id="aiSidebar">
+        <div class="ai-sidebar-header">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-robot" style="font-size:1.2rem;"></i>
+                <strong>AI Pentest Assistant</strong>
+            </div>
+            <button class="btn btn-sm btn-outline-light" onclick="toggleAISidebar()"><i class="bi bi-x-lg"></i></button>
+        </div>
+        
+        <!-- AI Config Section: provider/model switcher -->
+        <div id="aiConfigPanel" class="ai-config-section p-2">
+            <div id="aiConfigStatus" class="alert alert-sm alert-warning mb-2 py-1 px-2" style="font-size:0.8rem;">
+                <i class="bi bi-exclamation-triangle"></i> Not configured
+            </div>
+            <div id="aiSetupPanel" style="display:none;">
+                <div class="text-center py-2">
+                    <p class="small text-muted mb-2">No AI providers configured yet.</p>
+                    <a href="/settings" class="btn btn-primary btn-sm"><i class="bi bi-gear me-1"></i>Go to Settings</a>
                 </div>
             </div>
+            <div id="aiProviderSwitcher" style="display:none;">
+                <select class="form-select form-select-sm mb-1" id="aiProviderModelSelect" onchange="switchProviderModel()">
+                </select>
+            </div>
+        </div>
+        
+        <!-- Usage Stats Bar -->
+        <div class="ai-usage-bar p-2" id="aiUsageBar" style="display:none;">
+            <div class="d-flex justify-content-between align-items-center" style="font-size:0.7rem;">
+                <span class="text-muted">Tokens: <strong id="aiTokenCount">0</strong></span>
+                <span class="text-muted">Cost: <strong id="aiCostDisplay">$0.000</strong></span>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="aiAutoAnalyze" checked onchange="toggleAutoAnalyze()">
+                    <label class="form-check-label small" for="aiAutoAnalyze">Auto</label>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Insights Feed -->
+        <div class="ai-insights" id="aiInsightsPanel" style="display:none;">
+            <div class="ai-insights-header p-2 d-flex justify-content-between align-items-center">
+                <small class="fw-bold"><i class="bi bi-lightbulb me-1"></i>Insights</small>
+                <button class="btn btn-link btn-sm p-0" onclick="toggleInsightsPanel()" style="font-size:0.75rem;">collapse</button>
+            </div>
+            <div class="ai-insights-feed" id="aiInsightsFeed" style="max-height:150px; overflow-y:auto;">
+            </div>
+        </div>
+        
+        <!-- Chat Area -->
+        <div class="ai-chat-area" id="aiChatArea">
+            <div class="text-center text-muted py-4">
+                <i class="bi bi-robot" style="font-size:2rem; opacity:0.3;"></i>
+                <p class="small mt-2 mb-1">Configure your AI provider to start</p>
+                <p class="small text-muted">I'll analyze your pentest data and suggest next steps</p>
+            </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="ai-quick-actions p-2" id="aiQuickActions" style="display:none;">
+            <div class="d-flex gap-1 flex-wrap">
+                <button class="btn btn-outline-primary btn-sm" onclick="sendQuickPrompt('status')" style="font-size:0.7rem;">
+                    <i class="bi bi-clipboard-check"></i> Status
+                </button>
+                <button class="btn btn-outline-warning btn-sm" onclick="sendQuickPrompt('vulns')" style="font-size:0.7rem;">
+                    <i class="bi bi-shield-exclamation"></i> Vulns
+                </button>
+                <button class="btn btn-outline-danger btn-sm" onclick="sendQuickPrompt('next')" style="font-size:0.7rem;">
+                    <i class="bi bi-lightning"></i> Next Steps
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="clearChatHistory()" style="font-size:0.7rem;">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Chat Input -->
+        <div class="ai-chat-input p-2">
+            <div class="input-group input-group-sm">
+                <textarea class="form-control form-control-sm" id="aiMessageInput" rows="1" placeholder="Ask about security findings..." 
+                    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIMessage();}" style="resize:none;"></textarea>
+                <button class="btn btn-primary btn-sm" onclick="sendAIMessage()" id="aiSendBtn">
+                    <i class="bi bi-send"></i>
+                </button>
+            </div>
+        </div>
+    </div>
         </div>
     </div>
 
@@ -1748,329 +1803,327 @@
             return div.innerHTML;
         }
 
-        // ========== AI ANALYSIS FUNCTIONS ==========
-        let chatHistory = [];
+        // ========== AI SIDEBAR FUNCTIONS ==========
         let aiConfigured = false;
+        let aiInsightPollInterval = null;
+        let aiUsagePollInterval = null;
+
+        function toggleAISidebar() {
+            const sidebar = document.getElementById('aiSidebar');
+            const body = document.body;
+            sidebar.classList.toggle('open');
+            body.classList.toggle('ai-sidebar-open');
+            
+            if (sidebar.classList.contains('open')) {
+                checkAIConfig();
+            }
+        }
 
         async function checkAIConfig() {
             try {
-                const response = await fetch('/api/ai/config');
+                const response = await fetch('/api/ai/providers');
                 const data = await response.json();
                 
-                aiConfigured = data.configured;
+                const configuredProviders = Object.keys(data.providers);
+                aiConfigured = configuredProviders.length > 0;
+                
                 const statusDiv = document.getElementById('aiConfigStatus');
                 
-                if (data.configured) {
-                    statusDiv.className = 'alert alert-success mb-3';
-                    statusDiv.innerHTML = `<i class="bi bi-check-circle"></i> AI configured (${data.provider})`;
-                    loadAISuggestions();
+                if (aiConfigured) {
+                    const activeProvider = data.active_provider || configuredProviders[0];
+                    const activeModel = data.active_model || '';
+                    const providerName = data.providers[activeProvider]?.info?.name || activeProvider;
+                    
+                    statusDiv.className = 'alert alert-sm alert-success mb-2 py-1 px-2';
+                    statusDiv.style.fontSize = '0.8rem';
+                    statusDiv.innerHTML = `<i class="bi bi-check-circle"></i> Active: ${providerName}`;
+                    
+                    // Populate provider/model switcher
+                    const select = document.getElementById('aiProviderModelSelect');
+                    select.innerHTML = '';
+                    for (const [ptype, pconfig] of Object.entries(data.providers)) {
+                        const pname = pconfig.info?.name || ptype;
+                        for (const model of pconfig.models) {
+                            const opt = document.createElement('option');
+                            opt.value = `${ptype}::${model.id}`;
+                            opt.textContent = `${pname} / ${model.name}`;
+                            if (ptype === activeProvider && model.id === activeModel) opt.selected = true;
+                            select.appendChild(opt);
+                        }
+                    }
+                    
+                    document.getElementById('aiSetupPanel').style.display = 'none';
+                    document.getElementById('aiProviderSwitcher').style.display = 'block';
+                    document.getElementById('aiUsageBar').style.display = 'block';
+                    document.getElementById('aiQuickActions').style.display = 'block';
+                    document.getElementById('aiInsightsPanel').style.display = 'block';
+                    
+                    startAIPolling();
+                    updateAIUsage();
                 } else {
-                    statusDiv.className = 'alert alert-warning mb-3';
-                    statusDiv.innerHTML = '<i class="bi bi-exclamation-triangle"></i> AI not configured';
+                    statusDiv.className = 'alert alert-sm alert-warning mb-2 py-1 px-2';
+                    statusDiv.style.fontSize = '0.8rem';
+                    statusDiv.innerHTML = '<i class="bi bi-exclamation-triangle"></i> No AI providers configured';
+                    document.getElementById('aiSetupPanel').style.display = 'block';
+                    document.getElementById('aiProviderSwitcher').style.display = 'none';
                 }
             } catch (error) {
                 console.error('Failed to check AI config:', error);
             }
         }
 
-        async function saveAIConfig() {
-            const config = {
-                provider: document.getElementById('aiProvider').value,
-                api_key: document.getElementById('aiApiKey').value,
-                model: document.getElementById('aiModel').value || null,
-                base_url: document.getElementById('aiBaseUrl').value || null,
-                temperature: parseFloat(document.getElementById('aiTemperature').value),
-                max_tokens: parseInt(document.getElementById('aiMaxTokens').value),
-                mcp_config: null  // TODO: Add MCP config UI
-            };
-
-            if (!config.provider) {
-                alert('Please select a provider');
-                return;
-            }
-
-            if (!config.api_key) {
-                alert('Please enter your API key');
-                return;
-            }
-
+        async function switchProviderModel() {
+            const select = document.getElementById('aiProviderModelSelect');
+            const [provider, model] = select.value.split('::');
+            
             try {
-                const response = await fetch('/api/ai/config', {
+                await fetch('/api/ai/set-active', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(config)
+                    body: JSON.stringify({ provider, model })
                 });
-
-                if (response.ok) {
-                    aiConfigured = true;
-                    alert('AI configuration saved successfully!');
-                    checkAIConfig();
-                } else {
-                    const error = await response.json();
-                    alert('Failed to save configuration: ' + (error.detail || 'Unknown error'));
-                }
-            } catch (error) {
-                alert('Failed to save configuration: ' + error.message);
-            }
-        }
-
-        function updateProviderFields() {
-            const provider = document.getElementById('aiProvider').value;
-            const baseUrlField = document.getElementById('aiBaseUrlField');
-            
-            if (provider === 'custom') {
-                baseUrlField.style.display = 'block';
-            } else {
-                baseUrlField.style.display = 'none';
-            }
-
-            // Set default models
-            const modelInput = document.getElementById('aiModel');
-            if (provider === 'openai') {
-                modelInput.placeholder = 'gpt-4';
-            } else if (provider === 'anthropic') {
-                modelInput.placeholder = 'claude-3-5-sonnet-20241022';
-            } else {
-                modelInput.placeholder = 'Model name';
-            }
-        }
-
-        async function loadAISuggestions() {
-            try {
-                const response = await fetch('/api/ai/suggestions');
-                const data = await response.json();
-                
-                const container = document.getElementById('aiSuggestions');
-                let html = '';
-                
-                for (const category of data.categories) {
-                    html += `<div class="mb-3">
-                        <div class="fw-bold small text-muted mb-2">${escapeHtml(category.name)}</div>`;
-                    
-                    for (const prompt of category.prompts.slice(0, 2)) {  // Show first 2
-                        html += `<div class="payload-card" style="padding: 0.5rem; margin-bottom: 0.4rem; font-size: 0.85rem;" onclick="useSuggestedPrompt('${escapeHtml(prompt).replace(/'/g, "\\'")}')">
-                            ${escapeHtml(prompt)}
-                        </div>`;
-                    }
-                    
-                    html += '</div>';
-                }
-                
-                container.innerHTML = html;
-            } catch (error) {
-                console.error('Failed to load suggestions:', error);
-            }
-        }
-
-        function useSuggestedPrompt(prompt) {
-            document.getElementById('aiMessageInput').value = prompt;
-            document.getElementById('aiMessageInput').focus();
+                checkAIConfig();
+            } catch (e) { console.error(e); }
         }
 
         async function sendAIMessage() {
-            if (!aiConfigured) {
-                alert('Please configure AI first');
-                return;
-            }
-
+            if (!aiConfigured) { alert('Configure AI first'); return; }
+            
             const input = document.getElementById('aiMessageInput');
             const message = input.value.trim();
-            
             if (!message) return;
-
-            // Add user message to chat
+            
             addChatMessage('user', message);
             input.value = '';
-
-            // Disable send button
+            
             const sendBtn = document.getElementById('aiSendBtn');
             sendBtn.disabled = true;
-            sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-
+            
+            // Show typing indicator
+            const chatArea = document.getElementById('aiChatArea');
+            const typingDiv = document.createElement('div');
+            typingDiv.id = 'aiTyping';
+            typingDiv.className = 'ai-msg ai-msg-assistant';
+            typingDiv.innerHTML = '<div class="ai-msg-bubble"><div class="ai-typing"><span></span><span></span><span></span></div></div>';
+            chatArea.appendChild(typingDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+            
             try {
                 const response = await fetch('/api/ai/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         message: message,
-                        history: chatHistory,
-                        context: await gatherProjectContext()
+                        project_id: projectId,
+                        include_context: true
                     })
                 });
-
+                
+                // Remove typing indicator
+                document.getElementById('aiTyping')?.remove();
+                
                 if (response.ok) {
                     const data = await response.json();
-                    addChatMessage('assistant', data.response);
+                    addChatMessage('assistant', data.content, data.actions, data.usage);
                 } else {
                     const error = await response.json();
-                    addChatMessage('error', 'Error: ' + (error.detail || 'Unknown error'));
+                    addChatMessage('error', error.detail || 'Unknown error');
                 }
             } catch (error) {
-                addChatMessage('error', 'Error: ' + error.message);
-            } finally {
-                sendBtn.disabled = false;
-                sendBtn.innerHTML = '<i class="bi bi-send"></i>';
+                document.getElementById('aiTyping')?.remove();
+                addChatMessage('error', error.message);
             }
+            
+            sendBtn.disabled = false;
+            updateAIUsage();
         }
 
-        async function analyzeProjectWithAI(analysisType) {
-            if (!aiConfigured) {
-                alert('Please configure AI first');
-                return;
-            }
-
-            addChatMessage('system', `Starting ${analysisType.replace('_', ' ')} analysis...`);
-
-            const sendBtn = document.getElementById('aiSendBtn');
-            sendBtn.disabled = true;
-
-            try {
-                const response = await fetch(`/api/ai/projects/${projectId}/analyze`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ type: analysisType })
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    addChatMessage('assistant', data.analysis);
-                } else {
-                    const error = await response.json();
-                    addChatMessage('error', 'Error: ' + (error.detail || 'Unknown error'));
-                }
-            } catch (error) {
-                addChatMessage('error', 'Error: ' + error.message);
-            } finally {
-                sendBtn.disabled = false;
-            }
+        function sendQuickPrompt(type) {
+            const prompts = {
+                'status': 'Give me a status overview of my current pentest. What have I tested so far and what areas need attention?',
+                'vulns': 'Analyze all current findings and identify the most critical vulnerabilities. Suggest specific exploitation payloads.',
+                'next': 'Based on what I\'ve done so far, what are the top 3 things I should test next? Include actionable payloads.'
+            };
+            document.getElementById('aiMessageInput').value = prompts[type] || '';
+            sendAIMessage();
         }
 
-        function addChatMessage(role, content) {
+        function addChatMessage(role, content, actions, usage) {
             const chatArea = document.getElementById('aiChatArea');
+            if (chatArea.querySelector('.text-center')) chatArea.innerHTML = '';
             
-            // Remove empty state if present
-            if (chatArea.querySelector('.text-center')) {
-                chatArea.innerHTML = '';
-            }
-
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'mb-3';
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `ai-msg ai-msg-${role === 'user' ? 'user' : 'assistant'}`;
             
-            let bgColor, icon, label;
-            if (role === 'user') {
-                bgColor = '#e0f2fe';
-                icon = 'bi-person';
-                label = 'You';
-                chatHistory.push({ role: 'user', content: content });
-            } else if (role === 'assistant') {
-                bgColor = '#f0fdf4';
-                icon = 'bi-robot';
-                label = 'AI Assistant';
-                chatHistory.push({ role: 'assistant', content: content });
-            } else if (role === 'system') {
-                bgColor = '#fef3c7';
-                icon = 'bi-info-circle';
-                label = 'System';
-            } else {
-                bgColor = '#fee2e2';
-                icon = 'bi-exclamation-triangle';
-                label = 'Error';
+            // Format content: handle markdown-like formatting
+            let formattedContent = escapeHtml(content);
+            // Convert **bold** 
+            formattedContent = formattedContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            // Convert `code`
+            formattedContent = formattedContent.replace(/`([^`]+)`/g, '<code>$1</code>');
+            // Convert ```code blocks```
+            formattedContent = formattedContent.replace(/```([\s\S]*?)```/g, '<pre>$1</pre>');
+            // Convert newlines
+            formattedContent = formattedContent.replace(/\n/g, '<br>');
+            // Remove ACTION/INSIGHT tags from display
+            formattedContent = formattedContent.replace(/\[ACTION:\w+\].*?\[\/ACTION\]/gs, '');
+            formattedContent = formattedContent.replace(/\[INSIGHT\].*?\[\/INSIGHT\]/gs, '');
+            
+            let html = `<div class="ai-msg-bubble">${formattedContent}`;
+            
+            // Add action buttons
+            if (actions && actions.length > 0) {
+                html += '<div class="mt-2">';
+                for (const action of actions) {
+                    const actionData = encodeURIComponent(JSON.stringify(action));
+                    html += `<button class="ai-action-btn" onclick="executeAIAction('${actionData}')">
+                        <i class="bi bi-play-fill"></i> ${escapeHtml(action.label || action.type)}
+                    </button>`;
+                }
+                html += '</div>';
             }
-
-            messageDiv.innerHTML = `
-                <div style="background: ${bgColor}; padding: 1rem; border-radius: 8px;">
-                    <div class="d-flex align-items-center mb-2">
-                        <i class="bi ${icon} me-2"></i>
-                        <strong class="small">${label}</strong>
-                    </div>
-                    <div style="white-space: pre-wrap; font-size: 0.9rem;">${escapeHtml(content)}</div>
-                </div>
-            `;
-
-            chatArea.appendChild(messageDiv);
+            
+            // Add usage info for assistant messages
+            if (usage && role === 'assistant') {
+                html += `<div class="text-muted mt-1" style="font-size:0.65rem;">
+                    ${usage.input_tokens + usage.output_tokens} tokens · $${usage.estimated_cost_usd.toFixed(4)}
+                </div>`;
+            }
+            
+            html += '</div>';
+            msgDiv.innerHTML = html;
+            
+            chatArea.appendChild(msgDiv);
             chatArea.scrollTop = chatArea.scrollHeight;
         }
 
+        async function executeAIAction(encodedAction) {
+            const action = JSON.parse(decodeURIComponent(encodedAction));
+            
+            if (!confirm(`Execute action: ${action.label || action.type}?`)) return;
+            
+            try {
+                const response = await fetch('/api/ai/execute-action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action_type: action.type,
+                        action_data: action.data,
+                        project_id: projectId
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    addChatMessage('assistant', `Action executed successfully: ${action.label || action.type}\n\nResult: ${JSON.stringify(data.result, null, 2)}`);
+                } else {
+                    addChatMessage('error', `Action failed: ${data.detail || 'Unknown error'}`);
+                }
+            } catch (error) {
+                addChatMessage('error', `Action error: ${error.message}`);
+            }
+        }
+
         function clearChatHistory() {
-            if (confirm('Clear chat history?')) {
-                chatHistory = [];
+            fetch('/api/ai/clear-history', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ project_id: projectId })
+            });
+            
+            document.getElementById('aiChatArea').innerHTML = `
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-robot" style="font-size:2rem; opacity:0.3;"></i>
+                    <p class="small mt-2">Chat cleared. Ask me anything about your pentest.</p>
+                </div>`;
+        }
+
+        async function disconnectAI() {
+            if (!confirm('Disconnect all AI providers and wipe keys from memory?\n\nThis will clear all chat history and insights.\nYou can reconfigure in Settings.')) return;
+            
+            try {
+                await fetch('/api/ai/disconnect', { method: 'POST' });
+                
+                aiConfigured = false;
+                if (aiInsightPollInterval) clearInterval(aiInsightPollInterval);
+                if (aiUsagePollInterval) clearInterval(aiUsagePollInterval);
+                
                 document.getElementById('aiChatArea').innerHTML = `
-                    <div class="text-center text-muted py-5">
-                        <i class="bi bi-chat-dots" style="font-size: 3rem; opacity: 0.3;"></i>
-                        <p class="mt-3">Start a conversation to analyze your security findings</p>
-                        <p class="small">Ask about vulnerabilities, PII exposure, attack vectors, or pentesting strategies</p>
-                    </div>
-                `;
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-robot" style="font-size:2rem; opacity:0.3;"></i>
+                        <p class="small mt-2 mb-1">AI disconnected</p>
+                        <p class="small text-muted"><a href="/settings">Go to Settings</a> to reconfigure</p>
+                    </div>`;
+                
+                checkAIConfig();
+            } catch (error) {
+                alert('Error disconnecting: ' + error.message);
             }
         }
 
-        async function gatherProjectContext() {
-            // Gather comprehensive project data to provide full context to AI
-            const context = {
-                project_name: project?.name,
-                project_description: project?.description,
-                project_status: project?.status
-            };
-
-            // Add traffic analysis summary with detailed findings
-            try {
-                const trafficResp = await fetch(`/api/traffic/projects/${projectId}/summary`);
-                if (trafficResp.ok) {
-                    context.traffic_summary = await trafficResp.json();
-                }
-            } catch (e) {
-                console.log('Could not fetch traffic summary:', e);
-            }
-
-            // Add recent PCAP analyses with full results
-            try {
-                const analysesResp = await fetch(`/api/traffic/projects/${projectId}/analyses`);
-                if (analysesResp.ok) {
-                    const analysesData = await analysesResp.json();
-                    context.recent_analyses = analysesData.analyses?.slice(0, 5) || [];
-                }
-            } catch (e) {
-                console.log('Could not fetch analyses:', e);
-            }
-
-            // Add fuzzing jobs with results
-            try {
-                const fuzzerResp = await fetch(`/api/fuzzer/projects/${projectId}/jobs`);
-                if (fuzzerResp.ok) {
-                    const fuzzerData = await fuzzerResp.json();
-                    context.fuzzing_jobs = fuzzerData.jobs?.slice(0, 5) || [];
-                }
-            } catch (e) {
-                console.log('Could not fetch fuzzing jobs:', e);
-            }
-
-            // Add server instances with status
-            try {
-                const serversResp = await fetch(`/api/server/projects/${projectId}/servers`);
-                if (serversResp.ok) {
-                    const serversData = await serversResp.json();
-                    context.servers = serversData.servers || [];
-                }
-            } catch (e) {
-                console.log('Could not fetch servers:', e);
-            }
-
-            // Add client sessions
-            try {
-                const sessionsResp = await fetch(`/api/client/projects/${projectId}/sessions`);
-                if (sessionsResp.ok) {
-                    const sessionsData = await sessionsResp.json();
-                    context.client_sessions = sessionsData.sessions || [];
-                }
-            } catch (e) {
-                console.log('Could not fetch client sessions:', e);
-            }
-
-            return context;
+        async function toggleAutoAnalyze() {
+            const enabled = document.getElementById('aiAutoAnalyze').checked;
+            await fetch('/api/ai/toggle-auto-analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled })
+            });
         }
 
-        function showMCPConfig() {
-            alert('MCP (Model Context Protocol) configuration UI coming soon!\n\nFor now, you can use standard API configurations with OpenAI-compatible endpoints.');
+        function toggleInsightsPanel() {
+            const feed = document.getElementById('aiInsightsFeed');
+            feed.style.display = feed.style.display === 'none' ? 'block' : 'none';
+        }
+
+        async function updateAIUsage() {
+            try {
+                const response = await fetch('/api/ai/usage');
+                const data = await response.json();
+                document.getElementById('aiTokenCount').textContent = data.total_tokens.toLocaleString();
+                document.getElementById('aiCostDisplay').textContent = `$${data.total_cost_usd.toFixed(4)}`;
+            } catch (e) {}
+        }
+
+        async function pollAIInsights() {
+            if (!aiConfigured) return;
+            try {
+                const response = await fetch(`/api/ai/insights/${projectId}`);
+                const data = await response.json();
+                
+                const feed = document.getElementById('aiInsightsFeed');
+                const badge = document.getElementById('aiInsightBadge');
+                
+                if (data.insights && data.insights.length > 0) {
+                    let html = '';
+                    for (const insight of data.insights.slice(-5).reverse()) {
+                        const time = new Date(insight.timestamp).toLocaleTimeString();
+                        const typeIcon = insight.type === 'auto_analysis' ? 'bi-lightning' : 'bi-search';
+                        html += `<div class="ai-insight-card">
+                            <div class="d-flex justify-content-between mb-1">
+                                <small class="text-primary"><i class="bi ${typeIcon}"></i> ${insight.type === 'auto_analysis' ? 'Auto' : 'Manual'}</small>
+                                <small class="text-muted">${time}</small>
+                            </div>
+                            <div>${escapeHtml((insight.content || '').substring(0, 150))}${insight.content?.length > 150 ? '...' : ''}</div>
+                        </div>`;
+                    }
+                    feed.innerHTML = html;
+                    
+                    // Update badge
+                    badge.textContent = data.total;
+                    badge.style.display = data.total > 0 ? 'flex' : 'none';
+                }
+            } catch (e) {}
+        }
+
+        function startAIPolling() {
+            if (aiInsightPollInterval) clearInterval(aiInsightPollInterval);
+            if (aiUsagePollInterval) clearInterval(aiUsagePollInterval);
+            
+            aiInsightPollInterval = setInterval(pollAIInsights, 15000);
+            aiUsagePollInterval = setInterval(updateAIUsage, 30000);
+            
+            // Initial poll
+            pollAIInsights();
         }
 
         // Initialize
@@ -2082,10 +2135,8 @@
             pollServerLogs();
         });
         
-        // Check AI config when tab is shown
-        document.querySelector('button[data-bs-target="#aiTab"]').addEventListener('click', () => {
-            checkAIConfig();
-        });
+        // Check AI config on load
+        checkAIConfig();
     </script>
 </body>
 </html>

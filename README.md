@@ -1,250 +1,141 @@
-# Medaudit 2.0 - Medical Device Security Analyzer
+# Medaudit 2.0 - Medical Device Security Audit Platform
 
-**Version**: 2.0.0 | **Status**: ✅ Production Ready | **Last Updated**: February 1, 2026
+A comprehensive security auditing tool for HL7 v2.x medical device communications. Built for penetration testers, security auditors, and researchers working with healthcare systems.
 
-**Agent Instructions**: Development agents and contributors should read the project-specific agent guidance in `.github/copilot-instructions.md` before making edits.
-
-Medaudit 2.0 is a comprehensive security analysis tool for HL7 v2.x and FHIR medical device communications. It provides PCAP traffic analysis, PII detection, HTTP-to-HL7 proxying, and a mock HL7 server for pentesting medical devices in controlled environments.
+Medaudit provides PCAP traffic analysis, PII detection, an interactive HL7 client with malformed payload library, protocol fuzzing, a managed HL7 server, HTTP-to-HL7 proxying, and an AI-powered pentest co-pilot -- all through a unified web interface.
 
 ---
 
-## 🎯 Core Features
-
-### 1. PCAP Traffic Analysis & PII Detection
-**Analyze network traffic captures for encryption status and sensitive data exposure**
-
-- ✅ **Encryption Detection**: SSL port analysis + Shannon entropy heuristics
-- ✅ **HL7 v2.x Parsing**: MLLP protocol (0x0B/0x1C0D) message extraction
-- ✅ **PII Detection**: Microsoft Presidio NLP + regex patterns
-  - Healthcare entities: PERSON, PATIENT_ID, MEDICAL_RECORD_NUMBER
-  - Financial: CREDIT_CARD (Luhn validated), BANK_NUMBER, ROUTING_NUMBER
-  - Personal: SSN, PHONE_NUMBER, EMAIL, ADDRESS, DATE_OF_BIRTH
-  - Locations: Street addresses, cities, zip codes
-- ✅ **Comprehensive Reporting**: Traffic classification, HL7 messages, PII instances
-
-**Quick Start:**
-```bash
-python -m medaudit analyze medaudit/testFiles/hl7_v2_unencrypted_synthetic.pcap
-```
-
-**Output:**
-```
-Traffic is fully unencrypted.
-Unencrypted packets: 1
-
-Detected PII instances: 3
-  PERSON: John Doe (score: 1.0)
-  PATIENT_ID: 12345 (score: 1.0)
-  PHONE_NUMBER: 555-0100 (score: 0.85)
-```
-
----
-
-### 2. Mock HL7 2.x Server
-**MLLP-compliant HL7 server for testing and development**
-
-- ✅ **Full MLLP Protocol**: Start byte (0x0B), end bytes (0x1C0D)
-- ✅ **Automatic ACK Responses**: AA (Application Accept) messages
-- ✅ **Multi-threaded**: Handles concurrent client connections
-- ✅ **Comprehensive Logging**: JSON Lines format with date organization
-- ✅ **Configurable**: Persistent settings via `medaudit/config/hl7server.json`
-
-**Usage:**
-```bash
-# Start server on port 2575
-python -m medaudit.hl7server start --port 2575
-
-# Start with custom host
-python -m medaudit.hl7server start --host 0.0.0.0 --port 2576
-
-# Show server configuration
-python -m medaudit.hl7server config --show
-
-# Create default configuration file
-python -m medaudit.hl7server config --create
-```
-
-**Features:**
-- Logs stored in `medaudit/logs/YYYY-MM-DD/`
-- Message tracking with timestamps
-- Connection event logging
-- Graceful shutdown support
-
----
-
-### 3. HL7 Client Library
-**Send HL7 messages programmatically or via CLI**
-
-- ✅ **Message Builders**: ADT (patient admit/discharge), ORM (orders), ORU (results), MDM (documents)
-- ✅ **MLLP Protocol**: Automatic framing with start/end bytes
-- ✅ **Connection Management**: Connect, send, disconnect with error handling
-- ✅ **Timeout Support**: Configurable timeouts for reliability
-
-**Programmatic Usage:**
-```python
-from medaudit.hl7server import HL7Client
-
-# Create client
-client = HL7Client(host='localhost', port=2575)
-
-# Send ADT message
-response = client.send_adt_message(
-    patient_id='12345',
-    patient_name='John^Doe',
-    event_type='A01'  # Admit
-)
-print(response)
-
-# Close connection
-client.disconnect()
-```
-
----
-
-### 4. HTTP-to-HL7 Proxy
-**Integrate medical device testing with Burp Suite, OWASP ZAP, or other HTTP tools**
-
-- ✅ **HTTP → MLLP Conversion**: Automatic protocol wrapping
-- ✅ **Burp Suite Compatible**: Use HTTP Repeater for HL7 testing
-- ✅ **Comprehensive Logging**: HTTP requests, conversions, HL7 responses, errors
-- ✅ **Remote Device Support**: Forward to external medical device servers
-
-**Usage:**
-```bash
-# Terminal 1: Start HL7 server (for testing)
-python -m medaudit.hl7server start --port 2575
-
-# Terminal 2: Start proxy
-python -m medaudit proxy --port 8080 --hl7-host localhost --hl7-port 2575
-
-# Terminal 3: Send HTTP request
-curl -X POST http://localhost:8080/ \
-  -d "MSH|^~\&|SEND|FAC|RECV|FAC|20260201||ADT^A01|001|P|2.5"
-```
-
-**Logs:** `medaudit/logs/proxy_activity.jsonl`
-
----
-
-### 5. Web UI Platform
-**Full-featured web interface for comprehensive security auditing**
-
-- ✅ **User Authentication**: Secure session-based authentication with PBKDF2 password hashing
-- ✅ **User Registration**: Self-service account creation with tabbed login/register interface
-- ✅ **Project Management**: Create and manage security audit projects
-- ✅ **HL7 Client**: Interactive client with malformed payload library (buffer overflow, SQLi, XSS, etc.)
-- ✅ **HL7 Fuzzer**: Web-based fuzzer with YAML/JSON rule configuration
-- ✅ **Traffic Analysis**: PCAP upload with network visualization and sequence diagrams
-- ✅ **Server Management**: Create and manage multiple HL7 server instances
-
-**Getting Started:**
-
-New users can register directly from the login page using the "Register" tab.
-
-**Default Admin Credentials** (for initial setup):
-```
-Username: admin
-Password: admin123
-```
-
-⚠️ **IMPORTANT**: Change the default admin password immediately after first login!
-
-**Usage:**
-```bash
-# Start with default credentials
-python -m medaudit web
-
-# Start with custom password
-python -m medaudit web --password "SecurePassword123!"
-
-# Start with auto-generated secure password
-python -m medaudit web --generate-password
-
-# Specify host and port
-python -m medaudit web --host 0.0.0.0 --port 8080
-```
-
-**Access:**
-- Web UI: http://lauthentication (protection against brute force)
-- 👤 Self-service user registration with email validation
-- API Docs: http://localhost:8080/docs
-
-**Features:**
-- 📊 Dashboard with project overview
-- 🔐 Rate-limited login (protection against brute force)
-- 🧪 Built-in malformed payload library for testing
-- 📈 Traffic visualization with Cytoscape.js
-- 📄 PDF report generation
-- 🔄 Session management (24-hour expiry)
-- 🤖 **AI-Powered Analysis** - Ask questions, brainstorm pentesting strategies, and get security recommendations using OpenAI, Anthropic Claude, or local models (Ollama/LM Studio). The AI has access to **comprehensive project context** including all traffic logs, PCAP data, HL7 messages, PII findings, fuzzing results, and server logs.
-
-**Documentation:**
-- 🔐 [Admin Credentials & Security](docs/ADMIN_CREDENTIALS.md)
-- 🤖 [AI Analysis Guide](docs/AI_ANALYSIS_GUIDE.md) - Full feature documentation
-- 🚀 [AI Quick Start](docs/AI_QUICK_START.md) - Get started in 5 minutes
-- 📊 [AI Context Guide](docs/AI_CONTEXT_GUIDE.md) - Understanding data exposure
-- 📝 [Default Admin Implementation](docs/DEFAULT_ADMIN_IMPLEMENTATION.md)
-
----
-
-## 🚀 Quick Start
-
-### Installation
+## Quick Start
 
 ```bash
-# Clone repository
-git clone https://github.com/yourusername/medaudit2.git
+# Clone and install
+git clone https://github.com/anirudhduggal/medaudit2.git
 cd medaudit2
-
-# Create virtual environment
 python3 -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# Install dependencies
+source venv/bin/activate
 pip install -r requirements.txt
 
 # Download Spacy model for PII detection (one-time, ~500MB)
 python -m spacy download en_core_web_lg
+
+# Start the web UI
+python -m medaudit web --generate-password
 ```
 
-### Verify Installation
+Open `http://localhost:8080` and log in with the credentials shown in the terminal.
+
+---
+
+## Features
+
+### Web UI Platform
+
+The primary interface for security auditing. Start with `python -m medaudit web` and access all features through the browser.
+
+**Authentication & Projects**
+- Single local admin account with CLI-configurable password (`--password` or `--generate-password`)
+- PBKDF2-SHA256 password hashing, rate-limited login (5 attempts / 5 min), session management
+- Project-based workspace organization for managing multiple engagements
+- Security headers (CSP, X-Frame-Options, etc.) on all responses
+
+**Client Tab -- Manual Testing**
+- Interactive HL7 client for sending messages to medical devices
+- Built-in malformed payload library: buffer overflow, SQL injection, XXE, command injection, format strings, delimiter manipulation
+- **Send Mode selector**: send payloads as a client (to a server) or start a malicious server (to send crafted responses to connecting clients)
+- HL7 Listener (Proxy) for receiving messages from medical devices
+- Full request/response logging
+
+**Fuzzer Tab -- Automated Testing**
+- YAML/JSON fuzzing rule configuration
+- Strategies: field mutation (overflow, special chars, SQL, cmd injection, unicode, boundary), segment injection/removal/reorder, delimiter manipulation
+- Real-time progress, start/stop controls, finding detection
+- Automatically uses target configured in the Client tab
+
+**Traffic Tab -- PCAP Analysis**
+- Upload and analyze PCAP files with HL7 traffic
+- HL7 message parsing with segment-level field detail
+- PII detection (Presidio NLP + regex): names, patient IDs, SSNs, credit cards, phone numbers, addresses
+- Encryption status assessment
+- Network flow visualization (Cytoscape.js graph + sequence diagrams)
+- Connection table with protocol and encryption breakdown
+
+**Server Tab -- Managed HL7 Servers**
+- Create multiple HL7 server instances with configurable ports
+- TLS support with certificate path validation
+- Real-time message logging (connections, received messages, sent ACKs, errors)
+- Start/stop with clean port release
+
+**AI Pentest Assistant (Sidebar)**
+- Persistent sidebar accessible across all tabs
+- AI-powered analysis with full project context awareness (server logs, client history, fuzzer findings, PCAP results)
+- Actionable suggestions with executable "Run this" buttons
+- Auto-analysis of events with batched processing
+- Token usage and cost tracking
+- Quick prompts: Status overview, Vulnerability analysis, Next steps
+
+### AI Provider Support
+
+Configure AI providers globally in **Settings** (gear icon on dashboard). All configured providers are available in every project's sidebar.
+
+| Provider | Models | Setup |
+|----------|--------|-------|
+| **Anthropic Claude** | Claude Sonnet 4, Claude 3.5 Sonnet/Haiku, Claude 3 Opus | API key from [console.anthropic.com](https://console.anthropic.com/settings/keys) |
+| **OpenAI** | GPT-4o, GPT-4o Mini, GPT-4 Turbo, o1, o3-mini | API key from [platform.openai.com](https://platform.openai.com/api-keys) |
+| **Google Gemini** | Gemini 2.5 Flash/Pro, Gemini 2.0 Flash, Gemini 1.5 Pro/Flash | API key from [aistudio.google.com](https://aistudio.google.com/apikey) |
+| **Ollama (Local)** | Any locally installed model | [ollama.com](https://ollama.com) -- no API key needed |
+
+API keys are stored in-memory only (never persisted to disk) and can be wiped via the Disconnect button or by restarting the server.
+
+### CLI Tools
+
+In addition to the web UI, Medaudit provides standalone CLI commands:
 
 ```bash
-# Check CLI
-python -m medaudit --help
+# Analyze a PCAP file
+python -m medaudit analyze path/to/capture.pcap
 
-# Run tests
-cd tests && pytest -v
+# Start HL7 mock server
+python -m medaudit.hl7server start --port 2575
 
-# Analyze sample PCAP
-python -m medaudit analyze medaudit/testFiles/hl7_v2_unencrypted_synthetic.pcap
+# Start HTTP-to-HL7 proxy (for Burp Suite / ZAP integration)
+python -m medaudit proxy --port 8080 --hl7-host localhost --hl7-port 2575
+
+# Show/create configuration
+python -m medaudit config --show
+python -m medaudit config --create
 ```
 
 ---
 
-## 📖 Usage Guide
-
-### Command Reference
+## Command Reference
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `analyze` | Analyze PCAP file | `python -m medaudit analyze <file.pcap>` |
-| `web` | Start web UI platform | `python -m medaudit web --port 8080` |
-| `proxy` | Start HTTP-to-HL7 proxy | `python -m medaudit proxy --port 8080` |
+| `web` | Start web UI | `python -m medaudit web --generate-password --port 8080` |
+| `analyze` | Analyze PCAP file | `python -m medaudit analyze capture.pcap` |
+| `proxy` | HTTP-to-HL7 proxy | `python -m medaudit proxy --port 8080 --hl7-port 2575` |
 | `config` | Manage configuration | `python -m medaudit config --show` |
-| `user` | Create user (local admin) | `python -m medaudit user --create --username john --password pass123` |
 | `hl7server start` | Start HL7 server | `python -m medaudit.hl7server start --port 2575` |
-| `hl7server config` | Configure HL7 server | `python -m medaudit.hl7server config --show` |
-| `fuzzer run` | Run HL7 fuzzer | `python -m medaudit.fuzzer run -c config.yaml` |
 
-### Configuration
+### Web Server Options
 
-Configuration files use JSON format and are auto-loaded from:
-1. `medaudit/config/medaudit.json` (preferred)
-2. `~/.medaudit.json` (user home)
-3. `~/.config/medaudit.json` (XDG config)
+```bash
+python -m medaudit web [OPTIONS]
 
-**Sample `medaudit/config/medaudit.json`:**
+Options:
+  --host TEXT          Host to bind (default: 0.0.0.0)
+  --port INT           Port to listen on (default: 8080)
+  --password TEXT      Set a custom admin password
+  --generate-password  Generate a random secure password
+```
+
+---
+
+## Configuration
+
+Configuration files are auto-loaded from `medaudit/config/medaudit.json`:
+
 ```json
 {
   "proxy": {
@@ -264,331 +155,122 @@ Configuration files use JSON format and are auto-loaded from:
 }
 ```
 
-**Create default config:**
-```bash
-python -m medaudit config --create
-```
+### Data Storage
+
+All runtime data is stored inside the `medaudit/` package:
+- **Database**: `medaudit/data/medaudit.db` (SQLite)
+- **Project artifacts**: `medaudit/data/artifacts/projects/<project_id>/pcaps/`
+- **Logs**: `medaudit/logs/YYYY-MM-DD/`
+- **Configuration**: `medaudit/config/`
 
 ---
 
-## 📁 Project Structure
-
-```
-medaudit2/
-├── medaudit/                      # Main package (all runtime data inside)
-│   ├── __init__.py                # Package metadata + AI instructions
-│   ├── __main__.py                # CLI dispatcher (analyze|web|proxy|config|fuzzer)
-│   │
-│   ├── utils/                     # Utilities and helpers
-│   │   └── paths.py               # Centralized path management
-│   │
-│   ├── config/                    # Configuration module
-│   │   ├── __init__.py            # Config class (JSON loading)
-│   │   ├── logging.py             # ProxyLogger, BaseJsonLogger
-│   │   ├── medaudit.json          # Main configuration
-│   │   └── hl7server.json         # HL7 server settings
-│   │
-│   ├── data/                      # Runtime data (inside package)
-│   │   ├── medaudit.db            # SQLite database
-│   │   └── artifacts/             # Project artifacts (PCAPs, exports)
-│   │       └── projects/{id}/pcaps/
-│   │
-│   ├── logs/                      # Runtime logs (inside package)
-│   │   └── YYYY-MM-DD/            # Date-organized JSON Lines logs
-│   │       ├── connections.jsonl
-│   │       ├── server_events.jsonl
-│   │       ├── hl7_messages.jsonl
-│   │       └── proxy_activity.jsonl
-│   │
-│   ├── analysis/                  # Traffic & PII analysis
-│   │   ├── traffic/               # PCAP parsing, encryption detection
-│   │   │   └── traffic_analysis.py
-│   │   └── pii/                   # PII detection (Presidio + regex)
-│   │       └── pii_check.py
-│   │
-│   ├── hl7server/                 # Mock HL7 server
-│   │   ├── hl7_mock_server.py     # MLLP server implementation
-│   │   ├── hl7_client.py          # HL7 client library
-│   │   ├── message_logger.py      # JSON Lines logging
-│   │   └── cli.py                 # HL7 server CLI
-│   │
-│   ├── proxy/                     # HTTP→HL7 proxy
-│   │   └── proxy_server.py        # HTTP server + MLLP conversion
-│   │
-│   ├── fuzzer/                    # HL7 Fuzzer
-│   │   ├── __main__.py            # Fuzzer CLI entry point
-│   │   ├── cli.py                 # Fuzzer commands
-│   │   ├── engine.py              # Fuzzing execution engine
-│   │   ├── strategies.py          # Mutation strategies
-│   │   ├── protocol.py            # HL7/MLLP protocol handling
-│   │   └── malicious_hl7_server.py # Attack server (17 modes)
-│   │
-│   ├── web/                       # Web UI Platform
-│   │   ├── app.py                 # FastAPI main app + routes
-│   │   ├── auth.py                # Authentication + session management
-│   │   ├── database.py            # SQLAlchemy models (User, Project, etc.)
-│   │   ├── projects.py            # Project CRUD API
-│   │   ├── client_api.py          # HL7 Client API + malformed payloads
-│   │   ├── fuzzer_api.py          # Fuzzer Web API
-│   │   ├── traffic_api.py         # PCAP analysis + visualization
-│   │   ├── server_api.py          # Managed HL7 server instances
-│   │   ├── ai_api.py              # AI Analysis API (NEW)
-│   │   └── templates/             # Jinja2 HTML templates
-│   │       └── project.html       # Project view with AI tab
-│   │
-│   └── testFiles/                 # Sample PCAP files
-│       ├── hl7_v2_unencrypted_synthetic.pcap
-│       └── hl7_v2_unencrypted_synthetic_no_pii.pcap
-│
-├── docs/                          # Documentation
-│   ├── README.md                  # Documentation index
-│   ├── AI_ANALYSIS_GUIDE.md       # Complete AI feature guide
-│   ├── AI_QUICK_START.md          # 5-minute AI setup guide
-│   ├── AI_CONTEXT_GUIDE.md        # AI data access documentation
-│   ├── ADMIN_CREDENTIALS.md       # Admin security guide
-│   └── DEFAULT_ADMIN_IMPLEMENTATION.md
-│
-├── tests/                         # Test suite
-│   ├── pytest.ini                 # Pytest configuration
-│   ├── conftest.py                # Shared fixtures
-│   ├── test_pii_check.py          # PII detection tests
-│   ├── test_ai_api.py             # AI API tests
-│   ├── test_hl7_server_client.py  # HL7 integration tests
-│   ├── test_admin_creation.py     # Admin user tests
-│   ├── verify_ai_feature.py       # AI feature verification
-│   └── results/                   # Test reports
-│
-├── pcap-samples/                  # Sample traffic captures
-├── requirements.txt               # Python dependencies
-├── README.md                      # This file
-└── .gitignore
-```
-
----
-
-## 🧪 Testing
-
-### Run Tests
+## Testing
 
 ```bash
-# All tests (run from project root)
-cd tests && pytest -v
-
-# Or from project root
+# Run all tests
 pytest tests/ -v
 
 # Specific test file
 pytest tests/test_pii_check.py -v
 
-# With coverage (if pytest-cov installed)
+# With coverage
 pytest tests/ --cov=medaudit --cov-report=html
-
-# Quick test (quiet mode)
-cd tests && pytest -q
 ```
-
-### Test Results
-```
-======================== 4 passed, 4 warnings in 3.23s =========================
-✅ test_detect_pii_with_presidio PASSED
-✅ test_detect_pii_credit_card_with_presidio PASSED
-✅ test_detect_pii_no_pii PASSED
-✅ test_logging PASSED
-```
-
-### Test Configuration
-- **Location**: `tests/pytest.ini`
-- **Fixtures**: `tests/conftest.py` (shared test utilities)
-- **Markers**: `@pytest.mark.unit`, `@pytest.mark.integration`, `@pytest.mark.pcap`
 
 ---
 
-## 🏗️ Architecture
+## Security
 
-### Data Flow
-```
-PCAP File
-    ↓
-Scapy.rdpcap() → Load packets
-    ↓
-Packet Classification (SSL ports + entropy analysis)
-    ↓
-HL7 Detection (MSH| marker + MLLP framing)
-    ↓
-PII Detection (Presidio NLP + Regex patterns)
-    ↓
-Results Report (JSON format)
-```
+Medaudit implements the following security measures:
 
-### Key Technologies
-| Technology | Purpose | Version |
-|------------|---------|---------|
-| **Scapy** | PCAP parsing & packet analysis | ≥2.7.0 |
-| **Presidio** | NLP-based PII detection | ≥2.2.360 |
-| **Spacy** | Natural language processing | ≥3.8.0 |
-| **FastAPI** | Web framework (planned) | ≥0.128.0 |
-| **SQLAlchemy** | Database ORM (planned) | ≥2.1.0 |
-
-### Centralized Path Management
-All runtime data uses `medaudit/utils/paths.py`:
-- **Config**: `medaudit/config/`
-- **Data**: `medaudit/data/` (database + artifacts)
-- **Logs**: `medaudit/logs/YYYY-MM-DD/`
-
-Benefits: Package encapsulation, simple distribution, clean root directory
+- **Password hashing**: PBKDF2-SHA256 with 600,000 iterations and constant-time comparison
+- **No default password**: Generates a random 20-character password if none is specified
+- **Rate limiting**: 5 login attempts per 5 minutes, 15-minute lockout
+- **Session management**: httpOnly cookies, 24-hour expiry, server-side revocation on logout
+- **Security headers**: X-Content-Type-Options, X-Frame-Options, CSP, Permissions-Policy
+- **Path traversal protection**: TLS certificate paths validated against allowlist
+- **API key safety**: Stored in-memory only, never written to disk or database
 
 ---
 
-## 🚧 Planned Features (Future Releases)
+## Troubleshooting
 
-### Enhanced Web Platform
-- 🔲 Two-factor authentication (2FA)
-- 🔲 User role management (viewer, analyst, admin)
-- 🔲 Real-time collaboration features
-- 🔲 Advanced analytics dashboard
-- 🔲 Custom report templates
-
-### Advanced Fuzzing
-- 🔲 Genetic algorithm-based fuzzing
-- 🔲 Coverage-guided fuzzing
-- 🔲 Crash analysis and deduplication
-- 🔲 Automated regression testing
-
-### FHIR Support
-- 🔲 FHIR R4 message parsing
-- 🔲 FHIR-specific PII detection
-- 🔲 FHIR REST API security testing
-
----
-
-## ⚡ Performance Notes
-
-| Operation | First Call | Subsequent Calls |
-|-----------|-----------|------------------|
-| **Spacy Model Load** | 2-5 seconds | Cached (instant) |
-| **PII Detection** | 100-500ms/payload | After model load |
-| **PCAP Analysis** | 1-3s per 1MB file | Depends on packet count |
-
-**Memory Usage:**
-- Spacy model: ~100MB loaded in memory
-- PCAP: Full file loaded (no streaming)
-- Typical workspace: <500MB (including database)
-
----
-
-## 🛠️ Troubleshooting
-
-### Spacy Model Issues
+**Spacy model not found:**
 ```bash
-# Model download fails
 python -m spacy download en_core_web_lg --upgrade
-
-# Verify model installed
-python -c "import spacy; spacy.load('en_core_web_lg')"
 ```
 
-### Port Already in Use
+**Port already in use:**
 ```bash
-# Find process using port
-lsof -i :2575
-
-# Kill process
+lsof -i :8080
 kill -9 <PID>
 ```
 
-### Import Errors
+**Database schema mismatch after update:**
 ```bash
-# Ensure virtual environment active
-source venv/bin/activate
+rm medaudit/data/medaudit.db
+# Restart the server -- database will be recreated
+```
 
-# Reinstall dependencies
+**Import errors:**
+```bash
+source venv/bin/activate
 pip install --force-reinstall -r requirements.txt
 ```
 
-### Configuration Not Loading
-```bash
-# Check config search paths
-python -c "from medaudit.paths import get_config_search_paths; print(get_config_search_paths())"
+---
 
-# Create default config
-python -m medaudit config --create
-```
+## Contributors
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/anirudhduggal">
+        <img src="https://github.com/anirudhduggal.png" width="80px;" alt="anirudhduggal"/><br />
+        <sub><b>anirudhduggal</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/securient">
+        <img src="https://github.com/securient.png" width="80px;" alt="securient"/><br />
+        <sub><b>securient</b></sub>
+      </a>
+    </td>
+  </tr>
+</table>
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Please:
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Follow existing code patterns
+2. Create a feature branch (`git checkout -b feature/my-feature`)
+3. Follow existing code patterns and PEP 8 style
 4. Add tests for new functionality
-5. Update AI instructions in module docstrings
-6. Submit a pull request
-
-### Development Guidelines
-- **Code Style**: PEP 8, type hints preferred
-- **Testing**: Unit tests required for new features
-- **Documentation**: Docstrings with AI-friendly explanations
-- **Logging**: Use centralized `medaudit.config.logging` module
+5. Submit a pull request
 
 ---
 
-## 📝 AI Agent Instructions
+## Disclaimer
 
-Medaudit 2.0 includes comprehensive AI agent instructions throughout the codebase:
+**Medaudit 2.0 is intended for authorized security testing and research purposes only.**
 
-### Module-Level Instructions
-Each module has detailed docstrings explaining:
-- Purpose and functionality
-- Key functions and their signatures  
-- Dependencies and imports
-- Common usage patterns
-- Error handling approach
-
-**Key Modules:**
-- `medaudit/__init__.py` - Package overview, project structure, testing info
-- `medaudit/analysis/traffic/traffic_analysis.py` - PCAP parsing workflow
-- `medaudit/analysis/pii/pii_check.py` - PII detection methods
-- `medaudit/proxy/proxy_server.py` - HTTP-to-HL7 conversion
-- `medaudit/hl7server/hl7_mock_server.py` - MLLP server implementation
-
-### For AI Developers
-- All public functions have detailed docstrings
-- Error handling patterns are consistent
-- Configuration is centralized
-- Test files demonstrate expected behavior
-
----
-
-## ⚠️ Disclaimer
-
-**Medaudit 2.0 is intended for educational and authorized security research purposes only.**
-
-- Use responsibly and only on systems you have explicit permission to test
+- Use only on systems you have explicit permission to test
 - The authors are not responsible for any misuse or damage caused by this tool
-- Always comply with applicable laws and regulations
-- Medical device testing should follow proper regulatory guidelines
+- Always comply with applicable laws, regulations, and organizational policies
+- Medical device testing should follow proper regulatory guidelines (FDA, IEC 62443)
 
 ---
 
-## 📄 License
+## License
 
-MIT License - see [LICENSE](LICENSE) file for details
-
----
-
-## 📞 Support & Contact
-
-- **Issues**: [GitHub Issue Tracker](https://github.com/yourusername/medaudit2/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/medaudit2/discussions)
-- **Documentation**: This README + module docstrings
-- **Email**: [Your contact email]
+MIT License -- see [LICENSE](LICENSE) for details.
 
 ---
 
-**Version**: 2.0.0  
-**Last Updated**: February 1, 2026  
-**Status**: ✅ **Production Ready** (Core Features)
+## Support
 
-*Built for security professionals, auditors, and researchers working with medical device communications.*
+- **Issues**: [GitHub Issues](https://github.com/anirudhduggal/medaudit2/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/anirudhduggal/medaudit2/discussions)

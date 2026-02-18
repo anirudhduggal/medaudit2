@@ -33,10 +33,10 @@ reportlab>=4.0.0
 # Testing
 pytest>=8.0.0
 
-# AI Analysis (Optional - Install based on your provider)
-# Uncomment the provider you want to use:
-# openai>=1.0.0          # For OpenAI GPT-4
-# anthropic>=0.18.0      # For Anthropic Claude
+# AI Analysis (install providers you plan to use)
+anthropic>=0.40.0        # Anthropic Claude
+openai>=1.0.0            # OpenAI GPT-4o
+google-genai>=1.0.0      # Google Gemini
 
 # Post-install steps:
 # 1. Download spacy model: python -m spacy download en_core_web_lg
