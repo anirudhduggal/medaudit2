@@ -178,6 +178,7 @@ class Project(Base):
     client_sessions = relationship("ClientSession", back_populates="project", cascade="all, delete-orphan")
     fuzzing_jobs = relationship("FuzzingJob", back_populates="project", cascade="all, delete-orphan")
     server_instances = relationship("ServerInstance", back_populates="project", cascade="all, delete-orphan")
+    ai_credentials = relationship("AICredential", back_populates="project", cascade="all, delete-orphan")
 
     def get_artifacts_path(self, base_path: Path) -> Path:
         """Get the path for project artifacts."""
@@ -426,6 +427,60 @@ class ServerInstance(Base):
         }
         if include_logs:
             result["message_log"] = self.message_log or []
+        return result
+
+
+class AICredential(Base):
+    """
+    AI Provider credentials stored per project.
+    Keys are stored in the database for persistence.
+    """
+    __tablename__ = "ai_credentials"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False)
+    
+    # Provider type (anthropic, openai, gemini, ollama, etc.)
+    provider = Column(String(50), nullable=False)
+    
+    # API key (stored in database for persistence)
+    api_key = Column(String(2000), nullable=False)
+    
+    # Optional configuration
+    base_url = Column(String(500), nullable=True)  # For custom/Ollama endpoints
+    default_model = Column(String(100), nullable=True)
+    
+    # Metadata
+    is_active = Column(Boolean, default=False)  # Currently selected provider
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_validated = Column(DateTime, nullable=True)
+    validation_error = Column(String(500), nullable=True)
+
+    # Relationships
+    project = relationship("Project", back_populates="ai_credentials")
+
+    def to_dict(self, include_keys: bool = False):
+        """
+        Convert to dictionary. By default, API keys are NOT included (security).
+        Only return keys if explicitly requested and user is authorized.
+        """
+        result = {
+            "id": self.id,
+            "project_id": self.project_id,
+            "provider": self.provider,
+            "base_url": self.base_url,
+            "default_model": self.default_model,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "last_validated": self.last_validated.isoformat() if self.last_validated else None,
+            "validation_error": self.validation_error,
+        }
+        if include_keys:
+            # Only include masked key
+            masked = f"sk-...{self.api_key[-8:]}" if len(self.api_key) > 8 else "sk-..."
+            result["api_key_masked"] = masked
         return result
 
 

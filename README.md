@@ -27,6 +27,14 @@ Open `http://localhost:8080` and log in with the credentials shown in the termin
 
 ---
 
+## Documentation
+
+- **[CLAUDE.md](CLAUDE.md)** — Quick reference for developers (commands, structure, testing)
+- **[.github/copilot-instructions.md](.github/copilot-instructions.md)** — Comprehensive architecture and AI agent guidelines
+- **[docs/](docs/)** — Feature guides (AI Setup, Registration, Fuzzing Logs, etc.)
+
+---
+
 ## Features
 
 ### Web UI Platform

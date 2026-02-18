@@ -74,6 +74,53 @@ def _is_configured() -> bool:
         return len(_providers) > 0
 
 
+def _load_project_credentials(project_id: str, db: Session) -> bool:
+    """
+    Load AI credentials for a project from the database.
+    Returns True if at least one active credential was loaded.
+    """
+    global _active_provider_type, _active_model
+    
+    from .database import AICredential
+    credentials = db.query(AICredential).filter(
+        AICredential.project_id == project_id
+    ).all()
+    
+    if not credentials:
+        return False
+    
+    loaded_count = 0
+    with _config_lock:
+        for cred in credentials:
+            try:
+                provider = get_provider(
+                    provider_type=cred.provider,
+                    api_key=cred.api_key,
+                    base_url=cred.base_url,
+                )
+                
+                # Validate the loaded credential
+                is_valid, _ = provider.validate_key()
+                if is_valid:
+                    models = provider.list_models()
+                    _providers[cred.provider] = {
+                        "provider": provider,
+                        "models": models,
+                        "default_model": cred.default_model or (models[0]["id"] if models else None),
+                    }
+                    loaded_count += 1
+                    
+                    # Set as active if marked so
+                    if cred.is_active:
+                        _active_provider_type = cred.provider
+                        _active_model = cred.default_model or (models[0]["id"] if models else None)
+            except (ValueError, RuntimeError) as e:
+                logger.warning(f"Failed to load credential for {cred.provider}: {e}")
+                continue
+    
+    return loaded_count > 0
+
+
 # =============================================================================
 # Request/Response Schemas
 # =============================================================================
@@ -314,6 +361,156 @@ async def toggle_auto_analyze(
 
 
 # =============================================================================
+# Project-Level AI Credentials (for persistence across sessions)
+# =============================================================================
+
+@router.post("/projects/{project_id}/ai-credentials")
+async def save_project_credential(
+    project_id: str,
+    config: ConfigureProviderRequest,
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Save an AI provider credential to a project in the database.
+    Credentials are stored per-project and persist across server restarts.
+    """
+    # Verify user owns this project
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.owner_id == user.id
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Validate the credential
+    try:
+        provider = get_provider(
+            provider_type=config.provider,
+            api_key=config.api_key,
+            base_url=config.base_url,
+        )
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+    is_valid, error = provider.validate_key()
+    if not is_valid:
+        raise HTTPException(status_code=401, detail=f"API key validation failed: {error}")
+    
+    # Get available models
+    models = provider.list_models()
+    default_model = config.default_model or (models[0]["id"] if models else None)
+    
+    # Check if credential already exists
+    from .database import AICredential
+    existing = db.query(AICredential).filter(
+        AICredential.project_id == project_id,
+        AICredential.provider == config.provider
+    ).first()
+    
+    if existing:
+        # Update existing credential
+        existing.api_key = config.api_key
+        existing.base_url = config.base_url or None
+        existing.default_model = default_model
+        existing.last_validated = datetime.utcnow()
+        existing.validation_error = None
+        existing.is_active = True  # Set as active
+    else:
+        # Create new credential
+        cred = AICredential(
+            project_id=project_id,
+            provider=config.provider,
+            api_key=config.api_key,
+            base_url=config.base_url or None,
+            default_model=default_model,
+            is_active=True,
+            last_validated=datetime.utcnow(),
+        )
+        db.add(cred)
+    
+    # Deactivate other providers for this project
+    db.query(AICredential).filter(
+        AICredential.project_id == project_id,
+        AICredential.provider != config.provider
+    ).update({AICredential.is_active: False})
+    
+    db.commit()
+    
+    return {
+        "success": True,
+        "provider": config.provider,
+        "models": models,
+        "default_model": default_model,
+        "saved_to_project": True
+    }
+
+
+@router.get("/projects/{project_id}/ai-credentials")
+async def get_project_credentials(
+    project_id: str,
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Get AI provider credentials saved to a project (without exposing keys).
+    """
+    # Verify user owns this project
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.owner_id == user.id
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    from .database import AICredential
+    credentials = db.query(AICredential).filter(
+        AICredential.project_id == project_id
+    ).all()
+    
+    return {
+        "project_id": project_id,
+        "credentials": [cred.to_dict() for cred in credentials],
+        "active_provider": next(
+            (c.provider for c in credentials if c.is_active), None
+        )
+    }
+
+
+@router.delete("/projects/{project_id}/ai-credentials/{provider}")
+async def delete_project_credential(
+    project_id: str,
+    provider: str,
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Delete an AI provider credential from a project.
+    """
+    # Verify user owns this project
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.owner_id == user.id
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    from .database import AICredential
+    cred = db.query(AICredential).filter(
+        AICredential.project_id == project_id,
+        AICredential.provider == provider
+    ).first()
+    
+    if not cred:
+        raise HTTPException(status_code=404, detail="Credential not found")
+    
+    db.delete(cred)
+    db.commit()
+    
+    return {"success": True, "message": f"Credential for {provider} deleted"}
+
+
+# =============================================================================
 # Chat Endpoint
 # =============================================================================
 
@@ -326,7 +523,12 @@ async def chat(
     """
     Send a message to the AI with full project context.
     Optionally accepts provider/model override in the request.
+    Loads project-saved credentials from database if needed.
     """
+    # Try to load project credentials if none configured in memory
+    if not _is_configured():
+        _load_project_credentials(request.project_id, db)
+    
     provider = _get_active_provider()
     model = _get_active_model()
     

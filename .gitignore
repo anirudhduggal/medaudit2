@@ -152,6 +152,15 @@ tests/__pycache__/
 
 # Project-specific: Medaudit runtime data
 # ============================================
+
+# Database files (SQLite)
+medaudit/data/medaudit.db
+medaudit/data/*.db
+medaudit/data/medaudit.db-*
+*.db
+*.sqlite
+*.sqlite3
+
 # Runtime logs
 logs/
 **/logs/
@@ -166,13 +175,9 @@ medaudit/logs/
 medaudit/logs/**/*.jsonl
 medaudit/logs/**/*.log
 
-# Runtime data and database
-medaudit/data/medaudit.db
-medaudit/data/*.db
+# Runtime data and artifacts
 medaudit/data/artifacts/
 medaudit/data/fuzzing_logs/
-
-# Project artifacts
 artifacts/
 *.pcap.processed
 *.json.tmp
