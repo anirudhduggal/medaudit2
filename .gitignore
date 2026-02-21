@@ -1,141 +1,69 @@
-# Byte-compiled / optimized / DLL files
+# =============================================================================
+# Medaudit 2.0 - .gitignore
+# =============================================================================
+
+# ---- Python ----
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
 *.egg
+*.egg-info/
+.eggs/
 MANIFEST
+.installed.cfg
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-.python-version
-
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
+# ---- Virtual Environments ----
 .env
 .venv
 env/
 venv/
 ENV/
-env.bak/
-venv.bak/
 
-# Spyder project settings
-.spyderproject
-.spyproject
+# ---- Distribution / Packaging ----
+.Python
+build/
+dist/
+sdist/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+develop-eggs/
+downloads/
 
-# Rope project settings
-.ropeproject
+# ---- Testing ----
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache/
+.hypothesis/
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+tests/logs/
+tests/results/
+tests/.pytest_cache/
+tests/__pycache__/
 
-# mkdocs documentation
-/site
-
-# mypy
+# ---- Type Checkers ----
 .mypy_cache/
 .dmypy.json
 dmypy.json
-
-# Pyre type checker
 .pyre/
 
-# IDEs
+# ---- IDEs ----
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+*.iml
 
-# OS
+# ---- OS Files ----
 .DS_Store
 .DS_Store?
 ._*
@@ -144,20 +72,24 @@ dmypy.json
 ehthumbs.db
 Thumbs.db
 
-# Test Directory Contents
-tests/logs/
-tests/results/
-tests/.pytest_cache/
-tests/__pycache__/
+# ---- Java / Gradle (Burp Extension) ----
+burp-extension/build/
+burp-extension/.gradle/
+burp-extension/lib/*.jar
+*.class
 
-# Project-specific: Medaudit runtime data
-# ============================================
+# ---- Docker ----
+docker-compose.override.yml
 
-# Database files (SQLite)
-medaudit/data/medaudit.db
-medaudit/data/*.db
-medaudit/data/medaudit.db-*
+# =============================================================================
+# Medaudit Runtime Data (generated at runtime, never commit)
+# =============================================================================
+
+# Database files
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
 
@@ -167,43 +99,24 @@ logs/
 *.log
 *.jsonl
 
-# HL7 Server logs
-logs/hl7server/
-logs/2026-*
-logs/test_hl7server/
-medaudit/logs/
-medaudit/logs/**/*.jsonl
-medaudit/logs/**/*.log
-
-# Runtime data and artifacts
+# Project artifacts (PCAPs, reports, fuzzing results)
 medaudit/data/artifacts/
 medaudit/data/fuzzing_logs/
 artifacts/
 *.pcap.processed
-*.json.tmp
-
-# Proxy activity logs
-proxy_activity.jsonl
-test_logs/proxy_activity.jsonl
-
-# Test data and results
-test_logs/
-tests/logs/
-tests/results/
 
 # Temporary files
 *.tmp
 *.bak
 *.orig
-*~.nib
+*.json.tmp
 
-# Environment and configuration overrides
+# Local config overrides
 .env.local
 .env.*.local
 config.local.json
 hl7server.local.json
 
-# Session and cache files
+# Session files
 *.session
-.cache/
 session_*

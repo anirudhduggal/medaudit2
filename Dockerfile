@@ -7,7 +7,7 @@ FROM python:3.11-slim AS base
 
 # Metadata
 LABEL maintainer="securient"
-LABEL org.opencontainers.image.source="https://github.com/securient/medaudit2"
+LABEL org.opencontainers.image.source="https://github.com/anirudhduggal/medaudit2"
 LABEL org.opencontainers.image.description="Medical Device Security Audit Platform"
 
 # Prevent Python from writing .pyc files and enable unbuffered output
