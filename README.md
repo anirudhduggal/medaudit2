@@ -2,7 +2,7 @@
 
 A comprehensive security auditing tool for HL7 v2.x medical device communications. Built for penetration testers, security auditors, and researchers working with healthcare systems.
 
-Medaudit provides PCAP traffic analysis, PII detection, an interactive HL7 client with malformed payload library, protocol fuzzing, a managed HL7 server, HTTP-to-HL7 proxying, and an AI-powered pentest co-pilot -- all through a unified web interface.
+Medaudit provides PCAP traffic analysis, PII detection, an interactive HL7 client with malformed payload library, protocol fuzzing, a managed HL7 server, HTTP-to-HL7 proxying, a Burp Suite extension, and an AI-powered pentest co-pilot -- all through a unified web interface.
 
 ---
 
@@ -13,7 +13,7 @@ Medaudit provides PCAP traffic analysis, PII detection, an interactive HL7 clien
 git clone https://github.com/anirudhduggal/medaudit2.git
 cd medaudit2
 python3 -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 # Download Spacy model for PII detection (one-time, ~500MB)
@@ -24,14 +24,6 @@ python -m medaudit web --generate-password
 ```
 
 Open `http://localhost:8080` and log in with the credentials shown in the terminal.
-
----
-
-## Documentation
-
-- **[CLAUDE.md](CLAUDE.md)** — Quick reference for developers (commands, structure, testing)
-- **[.github/copilot-instructions.md](.github/copilot-instructions.md)** — Comprehensive architecture and AI agent guidelines
-- **[docs/](docs/)** — Feature guides (AI Setup, Registration, Fuzzing Logs, etc.)
 
 ---
 
@@ -84,7 +76,7 @@ The primary interface for security auditing. Start with `python -m medaudit web`
 
 ### AI Provider Support
 
-Configure AI providers globally in **Settings** (gear icon on dashboard). All configured providers are available in every project's sidebar.
+Configure AI providers globally in **Settings** (gear icon on dashboard). All configured providers are available in every project's sidebar. You can configure multiple providers and switch between them freely within any project.
 
 | Provider | Models | Setup |
 |----------|--------|-------|
@@ -94,6 +86,32 @@ Configure AI providers globally in **Settings** (gear icon on dashboard). All co
 | **Ollama (Local)** | Any locally installed model | [ollama.com](https://ollama.com) -- no API key needed |
 
 API keys are stored in-memory only (never persisted to disk) and can be wiped via the Disconnect button or by restarting the server.
+
+### Burp Suite Extension
+
+A Java extension for Burp Suite that forwards requests to the Medaudit HTTP-to-MLLP proxy for HL7 security testing.
+
+1. Download `medaudit2-burp-extension-1.0.0.jar` from the [Releases](https://github.com/anirudhduggal/medaudit2/releases) page
+2. In Burp Suite: **Extensions > Add > Java** and select the JAR
+3. Configure the Medaudit proxy host/port in the **Medaudit2** tab
+4. Right-click any request in Proxy/Repeater and select **"Send to Medaudit2"**
+5. Responses appear in the **Medaudit2 > Response Log** tab
+
+See [`burp-extension/README.md`](burp-extension/README.md) for full setup instructions including building from source.
+
+### Docker
+
+```bash
+# Pull and run
+docker pull anirudhduggal/medaudit:latest
+docker run -p 8080:8080 anirudhduggal/medaudit
+
+# With persistent data
+docker run -p 8080:8080 -v medaudit-data:/app/medaudit/data anirudhduggal/medaudit
+
+# With custom password
+docker run -p 8080:8080 anirudhduggal/medaudit --password "MySecurePassword"
+```
 
 ### CLI Tools
 
