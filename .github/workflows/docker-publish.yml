@@ -13,7 +13,7 @@ on:
     branches: [main]
 
 env:
-  DOCKERHUB_REPO: anirudhduggal/medaudit
+  DOCKERHUB_REPO: securient/medaudit
 
 jobs:
   build-and-push:
