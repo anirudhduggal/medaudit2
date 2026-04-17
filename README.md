@@ -6,6 +6,36 @@ Medaudit provides PCAP traffic analysis, PII detection, an interactive HL7 clien
 
 ---
 
+---
+
+## Screenshots
+
+| Projects Dashboard | New Project |
+|:---:|:---:|
+| ![Dashboard](docs/screenshots/1.png) | ![New Project](docs/screenshots/2.png) |
+
+| Manual HL7 Client | Malformed Payloads |
+|:---:|:---:|
+| ![Client](docs/screenshots/3.png) | ![Payloads](docs/screenshots/4.png) |
+
+| HL7 Device Fuzzer | Fuzzing History |
+|:---:|:---:|
+| ![Fuzzer](docs/screenshots/5.png) | ![Fuzzer Logs](docs/screenshots/6.png) |
+
+| Traffic Analysis | PII Detection |
+|:---:|:---:|
+| ![Traffic](docs/screenshots/7.png) | ![PII Results](docs/screenshots/8.png) |
+
+| Network Flow | HL7 Server Manager |
+|:---:|:---:|
+| ![Network](docs/screenshots/9.png) | ![Server](docs/screenshots/10.png) |
+
+| AI Assistant Sidebar | AI Analysis Example | AI Settings |
+|:---:|:---:|:---:|
+| ![AI Sidebar](docs/screenshots/11.png) | ![AI Example](docs/screenshots/12.png) | ![AI Settings](docs/screenshots/13.png) |
+
+---
+
 ## Quick Start
 
 ### Prerequisites
