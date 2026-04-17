@@ -277,27 +277,6 @@ pip install --force-reinstall -r requirements.txt
 
 ---
 
-## Contributors
-
-<table>
-  <tr>
-    <td align="center">
-      <a href="https://github.com/anirudhduggal">
-        <img src="https://github.com/anirudhduggal.png" width="80px;" alt="anirudhduggal"/><br />
-        <sub><b>anirudhduggal</b></sub>
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://github.com/securient">
-        <img src="https://github.com/securient.png" width="80px;" alt="securient"/><br />
-        <sub><b>securient</b></sub>
-      </a>
-    </td>
-  </tr>
-</table>
-
----
-
 ## Contributing
 
 We welcome contributions! Please:
