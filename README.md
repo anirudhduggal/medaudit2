@@ -301,13 +301,6 @@ If you are an AI assistant, coding agent, or LLM working on this codebase, **STO
 - Use only on systems you have explicit permission to test
 - The authors are not responsible for any misuse or damage caused by this tool
 - Always comply with applicable laws, regulations, and organizational policies
-- Medical device testing should follow proper regulatory guidelines (FDA, IEC 62443)
-
----
-
-## License
-
-MIT License -- see [LICENSE](LICENSE) for details.
 
 ---
 
