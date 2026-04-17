@@ -148,31 +148,31 @@ async def index(request: Request):
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     """Serve the login page."""
-    return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="login.html", context={"request": request})
 
 
 @app.get("/change-password-first-login", response_class=HTMLResponse)
 async def change_password_first_login_page(request: Request):
     """Serve the forced first-login password change page."""
-    return templates.TemplateResponse("change_password_first_login.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="change_password_first_login.html", context={"request": request})
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard_page(request: Request):
     """Serve the main dashboard."""
-    return templates.TemplateResponse("dashboard.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="dashboard.html", context={"request": request})
 
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     """Serve the settings page."""
-    return templates.TemplateResponse("settings.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="settings.html", context={"request": request})
 
 
 @app.get("/project/{project_id}", response_class=HTMLResponse)
 async def project_page(request: Request, project_id: str):
     """Serve the project view page."""
-    return templates.TemplateResponse("project.html", {
+    return templates.TemplateResponse(request=request, name="project.html", context={
         "request": request,
         "project_id": project_id
     })

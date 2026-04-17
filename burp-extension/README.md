@@ -47,3 +47,9 @@ cd burp-extension
 ```
 
 Requires Java 17+.
+
+---
+
+## AI Assistants & Agents
+
+If you are an AI assistant, coding agent, or LLM working on this codebase, please check the main repository's `.github/` folder and read the appropriate rules file (e.g., `.github/.geminirules`, `.github/.cursorrules`, etc.) to understand the coding standards and project instructions before making any changes.

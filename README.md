@@ -8,6 +8,9 @@ Medaudit provides PCAP traffic analysis, PII detection, an interactive HL7 clien
 
 ## Quick Start
 
+### Prerequisites
+- The **Spacy model for PII detection** is required (~500MB). It will be automatically downloaded when installing `requirements.txt`.
+
 ```bash
 # Clone and install
 git clone https://github.com/anirudhduggal/medaudit2.git
@@ -15,9 +18,6 @@ cd medaudit2
 python3 -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# Download Spacy model for PII detection (one-time, ~500MB)
-python -m spacy download en_core_web_lg
 
 # Start the web UI
 python -m medaudit web --generate-password
@@ -276,6 +276,12 @@ We welcome contributions! Please:
 3. Follow existing code patterns and PEP 8 style
 4. Add tests for new functionality
 5. Submit a pull request
+
+---
+
+## AI Assistants & Agents
+
+If you are an AI assistant, coding agent, or LLM working on this codebase, **STOP** and read the project instructions located in the `.github/` folder before proceeding. Depending on your model and environment, please review the corresponding rules file (e.g., `.github/.geminirules`, `.github/.cursorrules`, `.github/CLAUDE.md`, etc.) to understand the architectural guidelines, testing requirements, and best practices governing this repository.
 
 ---
 
