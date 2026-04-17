@@ -46,9 +46,9 @@ def main():
     web_parser.add_argument('--port', type=int, default=8080,
                            help='Port for the web server (default: 8080)')
     web_parser.add_argument('--password', type=str, default=None,
-                           help='Set custom admin password')
+                           help='Set custom admin password (if not set, a random one will be generated)')
     web_parser.add_argument('--generate-password', action='store_true',
-                           help='Generate a random secure password for admin')
+                           help='Generate a random secure password for admin (default behavior)')
 
     # Config command
     config_parser = subparsers.add_parser('config', help='Configuration management')

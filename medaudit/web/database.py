@@ -511,15 +511,12 @@ class DatabaseManager:
         import secrets
         import string
         
-        # Generate random password if explicitly requested
-        if generate_random:
+        # generate random password if no password is specified
+        if generate_random or password is None:
             # Generate a cryptographically secure random password
             # 20 chars from alphanumeric + special = ~130 bits of entropy
             alphabet = string.ascii_letters + string.digits + "!@#$%^&*()-_=+"
             password = ''.join(secrets.choice(alphabet) for _ in range(20))
-        elif password is None:
-            # Use default password for convenience (can be changed via CLI flags)
-            password = "admin123"
         
         admin = session.query(User).filter(User.username == "admin").first()
         

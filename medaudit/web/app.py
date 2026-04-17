@@ -221,16 +221,16 @@ def start_web_server(
     
     # Display startup message with full password visible for copy
     print(f"""
-╔═══════════════════════════════════════════════════════════╗
-║             MEDAUDIT 2.0 - Security Audit Platform        ║
-╠═══════════════════════════════════════════════════════════╣
-║  Web UI:     http://{host}:{port:<5}                          ║
-║  API Docs:   http://{host}:{port:<5}/docs                     ║
-║                                                           ║
-║  Admin Login:                                             ║
-║    Username: admin                                        ║
-║    Password: {password:<44}║
-╚═══════════════════════════════════════════════════════════╝
++-----------------------------------------------------------+
+|             MEDAUDIT 2.0 - Security Audit Platform        |
++-----------------------------------------------------------+
+|  Web UI:     http://{host}:{port:<5}                          |
+|  API Docs:   http://{host}:{port:<5}/docs                     |
+|                                                           |
+|  Admin Login:                                             |
+|    Username: admin                                        |
+|    Password: {password:<44}|
++-----------------------------------------------------------+
 """)
     
     uvicorn.run(app, host=host, port=port)

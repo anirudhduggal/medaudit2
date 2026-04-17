@@ -30,8 +30,7 @@ Complete documentation for the medical device security analyzer.
   - Token usage estimates
 
 ### Security & Administration
-- **[Admin Credentials](ADMIN_CREDENTIALS.md)** - Default admin account security
-  - Default credentials: `admin` / `admin123`
+- **[Admin Credentials](ADMIN_CREDENTIALS.md)** - Admin account security
   - Password management
   - Security best practices
   - Production deployment recommendations

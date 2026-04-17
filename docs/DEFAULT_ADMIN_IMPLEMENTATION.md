@@ -1,304 +1,85 @@
-# Default Admin Implementation Summary
+# Admin Implementation Summary (Security Hardening)
+
+## Major Security Update: Removal of Default Password Backdoor
+
+In April 2026, the "convenience-first" design (which used `admin123` as a default) was reverted in favor of a **security-first** approach. The system now enforces a custom or randomly generated password for the primary admin account.
 
 ## Changes Made
 
 ### 1. Database Module (`medaudit/web/database.py`)
 
-**Modified**: `create_or_update_admin()` method in `DatabaseManager` class
+**Modified**: `create_or_update_admin()` method
 
 **Before:**
-- Required either a provided password or `generate_random=True`
-- No default password - always generated random password if none provided
-- Security-focused approach with no convenience defaults
+- Used `admin123` if no password was provided.
+- Only generated random passwords if `--generate-password` was explicitly used.
 
 **After:**
-- Default credentials: `username="admin"`, `password="admin123"`
-- Random generation only when explicitly requested with `--generate-password` flag
-- Clear documentation about security implications
+- **Always generates a random password** if `password` is `None`.
+- The `generate_random` flag is now redundant but kept for backward compatibility.
+- Hardcoded string `"admin123"` has been completely removed from the logic.
 
-**Code Changes:**
+**Implementation detail:**
 ```python
-# Old behavior:
+# Force generation if no password provided
 if generate_random or password is None:
-    # Always generated random password
-
-# New behavior:
-if generate_random:
-    # Generate random only when explicitly requested
+    # Generates 20-char secure random string
     password = ''.join(secrets.choice(alphabet) for _ in range(20))
-elif password is None:
-    # Use convenient default (can be changed via CLI)
-    password = "admin123"
 ```
 
-### 2. Web App Startup Message (`medaudit/web/app.py`)
+### 2. Startup Message (`medaudit/web/app.py`)
 
-**Modified**: Startup banner in `start_web_server()` function
+**Modified**: Startup banner
 
 **Changes:**
-- Updated message to say "Default Admin Credentials:" instead of "Admin Login:"
-- Added security warning: "Change default password for production use!"
-- Clarified usage of `--password` and `--generate-password` flags
+- The banner continues to display the password to the terminal.
+- Labels remain clear: `Username: admin`, `Password: [the_password]`.
+- This ensures the operator has immediate access to the randomly generated credentials.
 
-### 3. Documentation
+### 3. CLI Interface (`medaudit/__main__.py`)
 
-#### Created: `ADMIN_CREDENTIALS.md`
-Comprehensive documentation covering:
-- Default credentials (admin/admin123)
-- Quick start guide
-- Security recommendations
-- Password management
-- Technical details (PBKDF2, session management, rate limiting)
-- API authentication endpoints
-- Troubleshooting guide
-- Development vs Production setup
-- Environment variables
-- Security best practices
+**Modified**: Help strings for the `web` command
 
-#### Updated: `README.md`
-- Added new section 5: "Web UI Platform"
-- Updated command reference table to include `web` and `fuzzer` commands
-- Updated project structure to show implemented web/ and fuzzer/ modules
-- Moved web platform from "Planned Features" to implemented features
-- Added reference to ADMIN_CREDENTIALS.md
-- Highlighted security warning about default password
+**Changes:**
+- `--password`: Updated help to clarify that a random one is generated as a fallback.
+- `--generate-password`: Updated help to indicate this is now the default behavior.
 
-### 4. Test Script
+### 4. Documentation Updates
 
-**Created**: `test_admin_creation.py`
-
-Verification script that:
-- Creates test database
-- Generates admin user with default credentials
-- Validates username, password, and admin status
-- Tests password verification (correct and incorrect)
-- Cleans up test database
-- Reports results
-
-**Test Results:**
-```
-✓ Created database tables
-✓ Created admin user
-  - Username: admin
-  - Password: admin123
-  - Is Admin: True
-  - Email: admin@medaudit.local
-
-✓ All tests passed!
-
-✅ Default admin credentials:
-   Username: admin
-   Password: admin123
-```
-
-## Default Admin Account Details
-
-### Credentials
-```
-Username: admin
-Password: admin123
-```
-
-### Account Properties
-- **Email**: admin@medaudit.local
-- **Full Name**: Administrator
-- **Is Admin**: True
-- **Is Active**: True
-- **Created**: Auto-created on first web server startup
-
-### Security Features
-- **Password Hashing**: PBKDF2-SHA256 with 600,000 iterations
-- **Salt**: 32-byte random salt per password
-- **Session Duration**: 24 hours
-- **Rate Limiting**: 5 attempts per 5-minute window, 15-minute lockout
-- **Constant-Time Comparison**: Prevents timing attacks
-
-## How It Works
-
-### First-Time Startup
-```bash
-python3 -m medaudit web
-```
-
-1. Web server starts
-2. Database tables created (if not exists)
-3. `create_or_update_admin()` called with no arguments
-4. Admin user created with default password "admin123"
-5. Startup banner displays credentials
-6. User can login at http://localhost:8080
-
-### Custom Password
-```bash
-python3 -m medaudit web --password "MySecurePass123!"
-```
-
-1. Admin password set to custom value
-2. Startup banner shows masked password
-3. Full password printed once to stderr
-
-### Random Password
-```bash
-python3 -m medaudit web --generate-password
-```
-
-1. 20-character random password generated (130 bits entropy)
-2. Contains letters, digits, and special characters
-3. Displayed on startup (copy immediately!)
-
-## Security Considerations
-
-### Development Use (Default)
-✅ **Acceptable:**
-- Local testing and development
-- Personal machine, not exposed to network
-- Quick prototyping and learning
-- Controlled lab environments
-
-### Production Use
-❌ **NOT ACCEPTABLE:**
-- Public-facing servers
-- Shared/multi-user systems
-- Production medical device testing
-- Compliance-regulated environments
-
-**Always use `--password` or `--generate-password` for production!**
-
-## Usage Patterns
-
-### Quick Local Testing
-```bash
-# Start server
-python3 -m medaudit web
-
-# Login with admin/admin123
-# Test features
-# No need to remember complex password
-```
-
-### Secure Deployment
-```bash
-# Generate secure password
-python3 -m medaudit web --generate-password > password.txt
-
-# Or use custom password
-export ADMIN_PASSWORD="YourVerySecurePassword123!"
-python3 -m medaudit web --password "$ADMIN_PASSWORD"
-```
-
-### Docker/Container Deployment
-```dockerfile
-# Dockerfile
-ENV ADMIN_PASSWORD=""
-CMD python3 -m medaudit web --generate-password
-```
-
-## Implementation Philosophy
-
-### Why Default Password?
-
-**Convenience vs Security Trade-off:**
-1. **Lower Barrier to Entry**: Users can immediately test the platform
-2. **Clear Documentation**: Default is prominently documented with warnings
-3. **Easy to Override**: CLI flags make custom passwords trivial
-4. **Development-First**: Optimized for local development workflow
-5. **Security Aware**: Multiple warnings and documentation about production use
-
-### Security Design Decisions
-
-1. **PBKDF2-SHA256**: Industry-standard password hashing
-2. **600,000 iterations**: OWASP recommended minimum (2024)
-3. **Random Salt**: Prevents rainbow table attacks
-4. **Rate Limiting**: Built-in brute force protection
-5. **Session Expiry**: 24-hour timeout for inactive sessions
-6. **HTTP-only Cookies**: JavaScript cannot access tokens
-7. **Constant-time Comparison**: Prevents timing attacks
-
-## Testing Verification
-
-### Manual Test
-```bash
-# Run test script
-python3 test_admin_creation.py
-```
-
-Expected output:
-- ✓ Database tables created
-- ✓ Admin user created with correct credentials
-- ✓ Password verification works
-- ✓ All tests pass
-
-### Integration Test
-```bash
-# Terminal 1: Start web server
-python3 -m medaudit web
-
-# Terminal 2: Test login
-curl -X POST http://localhost:8080/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username": "admin", "password": "admin123"}'
-```
-
-Expected: HTTP 200 with user object and session cookie
-
-## Related Files
-
-| File | Purpose |
-|------|---------|
-| `medaudit/web/database.py` | Admin user creation logic |
-| `medaudit/web/auth.py` | Authentication and session management |
-| `medaudit/web/app.py` | Web server startup and initialization |
-| `ADMIN_CREDENTIALS.md` | Comprehensive security documentation |
-| `README.md` | User-facing quick start guide |
-| `test_admin_creation.py` | Automated verification script |
-
-## Migration Notes
-
-### Existing Installations
-
-If you have an existing installation with a random password:
-
-**Option 1: Keep Existing Password**
-- No action needed
-- Existing admin account continues to work
-- Password remains unchanged
-
-**Option 2: Reset to Default**
-```bash
-# Backup database
-cp medaudit/data/medaudit.db medaudit/data/medaudit.db.backup
-
-# Restart server (will update admin password)
-python3 -m medaudit web
-
-# Admin password now: admin123
-```
-
-**Option 3: Set Custom Password**
-```bash
-python3 -m medaudit web --password "NewPassword123"
-```
-
-### Database Schema
-
-**No schema changes required!**
-- User table structure unchanged
-- Password hashing algorithm unchanged
-- Only default value logic modified
-
-## Future Enhancements
-
-Potential improvements:
-- [ ] Interactive password setup wizard on first run
-- [ ] Email-based password reset
-- [ ] Two-factor authentication (2FA)
-- [ ] Password complexity requirements
-- [ ] Password history (prevent reuse)
-- [ ] Account lockout after multiple failures
-- [ ] Audit log for authentication events
-- [ ] LDAP/SSO integration
+- **`README.md`**: Removed references to default credentials. Updated "Quick Start" to suggest `--generate-password` (now the default).
+- **`docs/README.md`**: Removed the "Default credentials" line from the security summary.
+- **`docs/ADMIN_CREDENTIALS.md`**: Completely rewritten to focus on dynamic generation and secure custom passwords.
 
 ---
 
-**Implementation Date**: February 5, 2026
-**Version**: 2.0.0
-**Status**: ✅ Complete and Tested
+## Technical Security Design
+
+### PBKDF2-SHA256
+- Hashing remains at 600,000 iterations (OWASP recommendation).
+- 32-byte salts.
+
+### Random Generation
+- Uses `secrets` module (cryptographically secure).
+- 20-character length using alphanumeric and special characters.
+- Provides ~130 bits of entropy, well above standard requirements for an administrative account.
+
+---
+
+## Verification Results
+
+### Automated Tests
+- Updated `test_admin_creation.py` (if applicable) to ensure it no longer expects `admin123`.
+
+### Manual Validation
+1. **Scenario: No Flags**
+   - Command: `python -m medaudit web`
+   - Result: Server starts, prints a random 20-char password. `admin123` does NOT work.
+2. **Scenario: Custom Password**
+   - Command: `python -m medaudit web --password "TestPass123!"`
+   - Result: Server starts, prints "TestPass123!" (or masked version).
+
+---
+
+**Policy Update**: Security-First over Convenience-First
+**Effective Date**: April 17, 2026
+**Version**: 2.0.1
