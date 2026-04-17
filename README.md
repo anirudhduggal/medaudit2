@@ -30,9 +30,9 @@ Medaudit provides PCAP traffic analysis, PII detection, an interactive HL7 clien
 |:---:|:---:|
 | ![Network](docs/screenshots/9.png) | ![Server](docs/screenshots/10.png) |
 
-| AI Assistant Sidebar | AI Analysis Example | AI Settings |
+| AI Assistant Sidebar | AI Settings |
 |:---:|:---:|:---:|
-| ![AI Sidebar](docs/screenshots/11.png) | ![AI Example](docs/screenshots/12.png) | ![AI Settings](docs/screenshots/13.png) |
+| ![AI Sidebar](docs/screenshots/11.png) | ![AI Settings](docs/screenshots/13.png) |
 
 ---
 
