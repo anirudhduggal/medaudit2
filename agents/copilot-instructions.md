@@ -2,7 +2,7 @@
 
 Medical device security analyzer for HL7/FHIR traffic. Detects encryption status, extracts HL7 v2.x messages, identifies PII exposure using Presidio NLP + regex patterns. Features a full-stack web UI with authentication, project management, HL7 client/fuzzer, traffic analysis with visualization, and PDF/JSON export.
 
-**Quick Reference**: See [CLAUDE.md](../../CLAUDE.md) for a concise developer quick-start guide with essential commands and project structure.
+**Quick Reference**: See [CLAUDE.md](CLAUDE.md) for a concise developer quick-start guide with essential commands and project structure.
 
 
 ## Current Status (February 11, 2026)

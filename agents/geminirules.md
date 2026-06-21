@@ -317,7 +317,7 @@ When you're asked to help with Medaudit code:
 ---
 
 ## Reference Links
-- **README**: [README.md](../../README.md)
+- **README**: [README.md](../README.md)
 - **Agent Instructions**: [copilot-instructions.md](copilot-instructions.md)
-- **Config Guide**: [medaudit/config/README.md](../../medaudit/config/README.md)
-- **HL7 Docs**: [medaudit/hl7server/README.md](../../medaudit/hl7server/README.md)
+- **Config Guide**: [medaudit/config/README.md](../medaudit/config/README.md)
+- **HL7 Docs**: [medaudit/hl7server/README.md](../medaudit/hl7server/README.md)

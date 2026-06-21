@@ -160,6 +160,12 @@ python -m medaudit proxy --port 8080 --hl7-host localhost --hl7-port 2575
 # Show/create configuration
 python -m medaudit config --show
 python -m medaudit config --create
+
+# Manage users
+python -m medaudit user --create --username john --password pass123 --admin
+
+# Run HL7 fuzzer
+python -m medaudit.fuzzer run -c config.yaml -o results.json
 ```
 
 ---
@@ -172,7 +178,12 @@ python -m medaudit config --create
 | `analyze` | Analyze PCAP file | `python -m medaudit analyze capture.pcap` |
 | `proxy` | HTTP-to-HL7 proxy | `python -m medaudit proxy --port 8080 --hl7-port 2575` |
 | `config` | Manage configuration | `python -m medaudit config --show` |
+| `user` | Create local users | `python -m medaudit user --create --username john --password pass123` |
 | `hl7server start` | Start HL7 server | `python -m medaudit.hl7server start --port 2575` |
+| `fuzzer run` | Run automated fuzzing | `python -m medaudit.fuzzer run -c config.yaml` |
+| `fuzzer test` | Test connection to server | `python -m medaudit.fuzzer test --host localhost --port 2575` |
+| `fuzzer server` | Start malicious server | `python -m medaudit.fuzzer server --mode no_ack` |
+| `fuzzer attacks`| List fuzzer attack modes | `python -m medaudit.fuzzer attacks` |
 
 ### Web Server Options
 
@@ -290,7 +301,7 @@ We welcome contributions! Please:
 
 ## AI Assistants & Agents
 
-If you are an AI assistant, coding agent, or LLM working on this codebase, **STOP** and read the project instructions located in the `.github/` folder before proceeding. Depending on your model and environment, please review the corresponding rules file (e.g., `.github/.geminirules`, `.github/.cursorrules`, `.github/CLAUDE.md`, etc.) to understand the architectural guidelines, testing requirements, and best practices governing this repository.
+If you are an AI assistant, coding agent, or LLM working on this codebase, **STOP** and read the project instructions located in the `agents/` folder before proceeding. Depending on your model and environment, please review the corresponding rules file (e.g., `agents/geminirules.md`, `agents/cursorrules.md`, `agents/CLAUDE.md`, etc.) to understand the architectural guidelines, testing requirements, and best practices governing this repository.
 
 ---
 

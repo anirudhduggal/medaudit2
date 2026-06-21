@@ -1,6 +1,6 @@
 # CLAUDE.md - Quick Reference for Developers
 
-This file is a quick reference for working with Medaudit 2.0. For comprehensive AI agent guidelines, project architecture, and constraints, see [.github/copilot-instructions.md](.github/copilot-instructions.md).
+This file is a quick reference for working with Medaudit 2.0. For comprehensive AI agent guidelines, project architecture, and constraints, see [copilot-instructions.md](copilot-instructions.md).
 
 ## Project Overview
 
@@ -91,7 +91,7 @@ After making changes:
 
 | File | Purpose |
 |------|---------|
-| [.github/copilot-instructions.md](.github/copilot-instructions.md) | **Comprehensive AI agent guidelines, architecture, patterns, constraints** |
+| [copilot-instructions.md](copilot-instructions.md) | **Comprehensive AI agent guidelines, architecture, patterns, constraints** |
 | [README.md](README.md) | Project overview, features, quick start |
 | [docs/](docs/) | Implementation guides (AI, Registration, Fuzzing Logs, etc.) |
 
@@ -126,4 +126,4 @@ CLI args → `medaudit/config/medaudit.json` → `~/.medaudit.json` → defaults
 
 ---
 
-**Note**: For comprehensive architectural details, critical code patterns (MLLP protocol, binary decoding, PII detection), error handling conventions, and AI agent responsibilities, see [.github/copilot-instructions.md](.github/copilot-instructions.md).
+**Note**: For comprehensive architectural details, critical code patterns (MLLP protocol, binary decoding, PII detection), error handling conventions, and AI agent responsibilities, see [copilot-instructions.md](copilot-instructions.md).

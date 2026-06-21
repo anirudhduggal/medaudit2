@@ -1,5 +1,5 @@
 # Medaudit 2.0 Dependencies
-# Last updated: 2026-02-01
+# Last updated: 2026-06-21
 
 # Core analysis
 scapy>=2.7.0
@@ -13,31 +13,32 @@ spacy>=3.8.0
 https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl
 
 # Web UI - Core
-fastapi>=0.128.0
-uvicorn[standard]>=0.40.0
-python-multipart>=0.0.22
+fastapi>=0.138.0
+uvicorn[standard]>=0.49.0
+python-multipart>=0.0.32
 jinja2>=3.1.6
 aiofiles>=25.1.0
 
 # Database
-sqlalchemy>=2.0.0
+sqlalchemy>=2.0.51
 
 # Configuration parsing
 pyyaml>=6.0
 
 # System utilities
 psutil>=6.0.0
+requests>=2.34.2
 
 # PDF Report Generation
-reportlab>=4.0.0
+reportlab>=5.0.0
 
 # Testing
-pytest>=8.0.0
+pytest>=9.1.1
 
 # AI Analysis (install providers you plan to use)
-anthropic>=0.40.0        # Anthropic Claude
-openai>=1.0.0            # OpenAI GPT-4o
-google-genai>=1.0.0      # Google Gemini
+anthropic>=0.111.0       # Anthropic Claude
+openai>=2.43.0           # OpenAI GPT-4o
+google-genai>=2.9.0      # Google Gemini
 
 # Post-install steps:
 # 1. Initialize database: python -c "from medaudit.web.database import get_db_manager; get_db_manager().create_tables()"
