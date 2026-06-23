@@ -563,8 +563,12 @@ async def chat(
     
     history = _chat_history[request.project_id]
     
-    # Add user message
-    history.append({"role": "user", "content": request.message})
+    # Add user message with timestamp for project activity tracking
+    history.append({
+        "role": "user",
+        "content": request.message,
+        "timestamp": datetime.utcnow().isoformat(),
+    })
     
     # Keep history manageable (last 20 messages)
     if len(history) > 20:
@@ -586,8 +590,12 @@ async def chat(
     # Record usage
     usage_tracker.record(response.usage)
     
-    # Add assistant response to history
-    history.append({"role": "assistant", "content": response.content})
+    # Add assistant response to history (with timestamp)
+    history.append({
+        "role": "assistant",
+        "content": response.content,
+        "timestamp": datetime.utcnow().isoformat(),
+    })
     
     return response.to_dict()
 
@@ -984,16 +992,24 @@ def _auto_analyze_worker():
                     }
                 }
                 
-                # Store insight for all active projects
-                # (In practice, events should be project-scoped)
-                for project_id in _chat_history.keys():
-                    if project_id not in _auto_insights:
-                        _auto_insights[project_id] = []
-                    _auto_insights[project_id].append(insight)
-                    
+                # Store insight only for the most recently active project to avoid
+                # cross-project data leakage. Events from context_engine are not
+                # project-scoped, so we target the project with the most recent activity.
+                if _chat_history:
+                    # Find the project with the most recent chat message
+                    most_recent_project = max(
+                        _chat_history.keys(),
+                        key=lambda pid: (
+                            _chat_history[pid][-1].get("timestamp", "")
+                            if _chat_history[pid] else ""
+                        )
+                    )
+                    if most_recent_project not in _auto_insights:
+                        _auto_insights[most_recent_project] = []
+                    _auto_insights[most_recent_project].append(insight)
                     # Keep manageable
-                    if len(_auto_insights[project_id]) > 50:
-                        _auto_insights[project_id] = _auto_insights[project_id][-50:]
+                    if len(_auto_insights[most_recent_project]) > 50:
+                        _auto_insights[most_recent_project] = _auto_insights[most_recent_project][-50:]
             
             context_engine.mark_analyzed()
             

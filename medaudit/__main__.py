@@ -3,7 +3,8 @@
 Medaudit 2.0 - Main Entry Point
 AI Agent Instructions:
 - This is the main entry point for the Medaudit 2.0 application
-python -m medaudit web --host 0.0.0.0 --port 8080- Run with: python -m medaudit analyze <pcap_file> for traffic analysis
+- Run with: python -m medaudit web --host 0.0.0.0 --port 8080
+- Run with: python -m medaudit analyze <pcap_file> for traffic analysis
 - Run with: python -m medaudit proxy [--port PORT] [--hl7-host HOST] [--hl7-port PORT] for HTTP-to-HL7 proxy
 - Run with: python -m medaudit web [--port PORT] [--host HOST] for web UI
 - It imports and calls the appropriate functionality
@@ -63,6 +64,9 @@ def main():
     user_parser.add_argument('--full-name', type=str, help='Full name (optional)')
     user_parser.add_argument('--admin', action='store_true', help='Make user an admin')
 
+    # MCP server command
+    mcp_parser = subparsers.add_parser('mcp', help='Start the Model Context Protocol (MCP) server for LLMs')
+
     args = parser.parse_args()
 
     if args.command == 'analyze':
@@ -120,6 +124,9 @@ def main():
         else:
             print("Use --create with --username and --password to create a user")
             print("Example: python -m medaudit user --create --username john --password pass123 --full-name 'John Doe'")
+    elif args.command == 'mcp':
+        from .mcp_server import mcp
+        mcp.run()
     else:
         parser.print_help()
         sys.exit(1)

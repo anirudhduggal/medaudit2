@@ -104,6 +104,7 @@ class HL7Server:
         try:
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.server_socket.settimeout(1.0)  # Allow accept() to be interrupted on stop()
             self.server_socket.bind((self.host, self.port))
             self.server_socket.listen(5)
             self.running = True
@@ -176,6 +177,9 @@ class HL7Server:
                 )
                 client_thread.start()
 
+            except socket.timeout:
+                # Expected: 1-second timeout fires so we can re-check self.running
+                continue
             except Exception as e:
                 if self.running:
                     self.logger.error(f"Error accepting connection: {e}")

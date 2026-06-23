@@ -23,7 +23,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from .database import get_db, Project, FuzzingJob, User
@@ -106,13 +107,17 @@ async def validate_fuzzing_config(
         return {"valid": False, "error": str(e)}
 
 
+class CreateFuzzingJobRequest(BaseModel):
+    """Request body for creating a fuzzing job."""
+    name: str
+    config_content: str
+    config_format: str = "yaml"
+
+
 @router.post("/projects/{project_id}/jobs")
 async def create_fuzzing_job(
     project_id: str,
-    name: str,
-    config_content: str,
-    config_format: str = "yaml",
-    background_tasks: BackgroundTasks = None,
+    request: CreateFuzzingJobRequest,
     user: User = Depends(require_auth),
     db: Session = Depends(get_db)
 ):
@@ -138,7 +143,7 @@ async def create_fuzzing_job(
     
     # Parse config
     try:
-        config = parse_fuzzing_config(config_content, config_format)
+        config = parse_fuzzing_config(request.config_content, request.config_format)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     
@@ -150,12 +155,12 @@ async def create_fuzzing_job(
     # Create job record
     job = FuzzingJob(
         project_id=project_id,
-        name=name,
+        name=request.name,
         target_host=config.get("target_host", "localhost"),
         target_port=config.get("target_port", 2575),
         use_tls=config.get("use_tls", False),
-        config_format=config_format,
-        config_content=config_content,
+        config_format=request.config_format,
+        config_content=request.config_content,
         status="pending"
     )
     

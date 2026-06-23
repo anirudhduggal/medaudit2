@@ -105,8 +105,28 @@ How can I test for buffer overflow vulnerabilities?
 | **Max Tokens** | Maximum response length | 2000 |
 
 ### MCP Configuration (Advanced)
-Model Context Protocol support for enhanced context sharing (Coming Soon).
+Medaudit includes a built-in Model Context Protocol (MCP) server that exposes core functionalities (mock server, fuzzer, PCAP analyzer, and client messaging) to external LLMs and AI agents like Claude Desktop and Cursor.
 
+To run the MCP server, use the CLI command:
+```bash
+python -m medaudit mcp
+```
+
+Example configuration for Claude Desktop (`claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "medaudit": {
+      "command": "python",
+      "args": ["-m", "medaudit", "mcp"],
+      "cwd": "/path/to/medaudit2",
+      "env": {
+        "PYTHONPATH": "/path/to/medaudit2"
+      }
+    }
+  }
+}
+```
 ## Security & Privacy
 
 ### ✅ Privacy Features
@@ -279,7 +299,7 @@ AI: [Provides specific testing methodology]
 
 ## Future Enhancements
 
-- [ ] MCP (Model Context Protocol) integration
+- [x] MCP (Model Context Protocol) integration
 - [ ] Direct integration with fuzzer results
 - [ ] Export AI recommendations to PDF reports
 - [ ] Multi-turn conversation memory

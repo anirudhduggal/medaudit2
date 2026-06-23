@@ -59,14 +59,8 @@ def validate_tls_path(path: Optional[str], field_name: str) -> Optional[str]:
             detail=f"Invalid {field_name}: {str(e)}"
         )
     
-    # Check for path traversal attempts
-    if ".." in path:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid {field_name}: path traversal not allowed"
-        )
-    
-    # Verify the path is within allowed directories
+    # Verify the path is within allowed directories via resolve() which handles all
+    # traversal forms (including encoded sequences). No raw string check needed.
     is_allowed = False
     for allowed_dir in ALLOWED_CERT_DIRS:
         try:
@@ -118,6 +112,7 @@ class ServerCreate(BaseModel):
     host: str = "0.0.0.0"
     port: int = 2575
     use_tls: bool = False
+    auto_tls: bool = True
     cert_path: Optional[str] = None
     key_path: Optional[str] = None
     malicious_mode: Optional[str] = None
@@ -130,6 +125,7 @@ class ServerUpdate(BaseModel):
     host: Optional[str] = None
     port: Optional[int] = None
     use_tls: Optional[bool] = None
+    auto_tls: Optional[bool] = None
     cert_path: Optional[str] = None
     key_path: Optional[str] = None
     malicious_mode: Optional[str] = None
@@ -530,8 +526,10 @@ async def create_server(
         key_path=validated_key_path,     # Use validated path
         settings=json.dumps({
             "malicious_mode": server_data.malicious_mode,
-            "custom_ack": server_data.custom_ack
-        }) if server_data.malicious_mode else None
+            "custom_ack": server_data.custom_ack,
+            "auto_tls": server_data.auto_tls
+        })
+
     )
     
     db.add(server)
@@ -710,6 +708,15 @@ async def update_server(
         server.port = server_data.port
     if server_data.use_tls is not None:
         server.use_tls = server_data.use_tls
+    if server_data.auto_tls is not None:
+        settings = {}
+        if server.settings:
+            try:
+                settings = json.loads(server.settings)
+            except:
+                pass
+        settings["auto_tls"] = server_data.auto_tls
+        server.settings = json.dumps(settings)
     if validated_cert_path is not None:
         server.cert_path = validated_cert_path
     if validated_key_path is not None:
@@ -750,24 +757,39 @@ async def start_server(
     if server_id in _active_servers and _active_servers[server_id].get("status") == "running":
         raise HTTPException(status_code=400, detail="Server is already running")
     
-    # Check TLS requirements
-    if server.use_tls and (not server.cert_path or not server.key_path):
-        raise HTTPException(
-            status_code=400,
-            detail="TLS enabled but certificate/key paths not configured"
-        )
-    
-    # Start server in background thread
-    from .database import get_db_manager
-    db_manager = get_db_manager()
-    
-    # Parse settings for malicious mode
+    # Parse settings
     settings = {}
     if server.settings:
         try:
             settings = json.loads(server.settings)
         except:
             pass
+            
+    # Check TLS requirements and auto-generate if needed
+    if server.use_tls:
+        auto_tls = settings.get("auto_tls", True)
+        if not server.cert_path or not server.key_path:
+            if auto_tls:
+                try:
+                    from medaudit.utils.tls import generate_self_signed_cert
+                    cert_path, key_path = generate_self_signed_cert()
+                    server.cert_path = cert_path
+                    server.key_path = key_path
+                    db.commit()
+                except ImportError as e:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Auto TLS failed: {str(e)}"
+                    )
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="TLS enabled but certificate/key paths not configured and auto_tls is disabled"
+                )
+    
+    # Start server in background thread
+    from .database import get_db_manager
+    db_manager = get_db_manager()
     
     config = {
         "host": server.host,
@@ -867,8 +889,10 @@ async def delete_server(
         raise HTTPException(status_code=404, detail="Project not found")
     
     # Stop if running
-    if server_id in _active_servers and "server" in _active_servers[server_id]:
-        _active_servers[server_id]["server"].stop()
+    if server_id in _active_servers:
+        if "server" in _active_servers[server_id]:
+            _active_servers[server_id]["server"].stop()
+        del _active_servers[server_id]
     
     db.delete(server)
     db.commit()
@@ -904,7 +928,11 @@ async def get_server_logs(
     
     # Get live logs if running, otherwise from database
     if server_id in _active_servers and "server" in _active_servers[server_id]:
-        logs = _active_servers[server_id]["server"].message_log[-limit:]
+        server_obj = _active_servers[server_id]["server"]
+        if hasattr(server_obj, 'message_log'):
+            logs = server_obj.message_log[-limit:]
+        else:
+            logs = (server.message_log or [])[-limit:]
     else:
         logs = (server.message_log or [])[-limit:]
     

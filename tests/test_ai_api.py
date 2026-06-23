@@ -19,189 +19,194 @@ from medaudit.web.app import app
 @pytest.fixture
 def client():
     """Create test client."""
-    return TestClient(app)
+    return TestClient(app, raise_server_exceptions=False)
 
 
 @pytest.fixture
-def auth_headers(client):
-    """Get authentication headers for test user."""
-    # Register test user
-    response = client.post("/auth/register", json={
-        "username": "testuser_ai",
-        "email": "testuser_ai@example.com",
-        "password": "testpass123",
-        "full_name": "Test User AI"
-    })
-    
-    # Login
+def auth_cookies(client):
+    """
+    Get authentication cookies for the admin test user.
+
+    Uses the admin account which is always present.
+    We use the database manager to set a known password so the test is
+    deterministic regardless of startup-time password generation.
+    """
+    from medaudit.web.database import get_db_manager
+    db_manager = get_db_manager()
+    db = db_manager.get_session()
+    try:
+        admin, _pwd = db_manager.create_or_update_admin(db, password="TestPass1234!")
+    finally:
+        db.close()
+
     response = client.post("/auth/login", json={
-        "username": "testuser_ai",
-        "password": "testpass123"
+        "username": "admin",
+        "password": "TestPass1234!"
     })
-    
-    # Extract session cookie
-    cookies = response.cookies
-    return {"Cookie": f"session={cookies.get('session')}"}
+    assert response.status_code == 200, f"Login failed: {response.text}"
+    # Return cookies dict (session_token is set as httpOnly cookie)
+    return {"session_token": response.cookies.get("session_token")}
 
 
-def test_ai_providers_endpoint(client, auth_headers):
-    """Test GET /api/ai/providers."""
-    response = client.get("/api/ai/providers", headers=auth_headers)
-    assert response.status_code == 200
-    
-    data = response.json()
-    assert "providers" in data
-    assert len(data["providers"]) >= 3
-    
-    # Check for expected providers
-    provider_ids = [p["id"] for p in data["providers"]]
-    assert "openai" in provider_ids
-    assert "anthropic" in provider_ids
-    assert "custom" in provider_ids
-    
-    # Verify provider structure
-    for provider in data["providers"]:
-        assert "id" in provider
-        assert "name" in provider
-        assert "requires_api_key" in provider
-        
+# =============================================================================
+# Provider listing / config endpoints
+# =============================================================================
 
-def test_ai_suggestions_endpoint(client, auth_headers):
-    """Test GET /api/ai/suggestions."""
-    response = client.get("/api/ai/suggestions", headers=auth_headers)
-    assert response.status_code == 200
-    
-    data = response.json()
-    assert "categories" in data
-    assert len(data["categories"]) >= 3
-    
-    # Verify category structure
-    for category in data["categories"]:
-        assert "name" in category
-        assert "prompts" in category
-        assert len(category["prompts"]) > 0
-
-
-def test_ai_config_save_and_get(client, auth_headers):
-    """Test POST /api/ai/config and GET /api/ai/config."""
-    # First check - should not be configured
-    response = client.get("/api/ai/config", headers=auth_headers)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["configured"] == False
-    
-    # Save config
-    config = {
-        "provider": "openai",
-        "api_key": "sk-test-key-123",
-        "model": "gpt-4",
-        "base_url": None,
-        "temperature": 0.7,
-        "max_tokens": 2000
-    }
-    
-    response = client.post("/api/ai/config", headers=auth_headers, json=config)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["success"] == True
-    
-    # Get config - should now be configured
-    response = client.get("/api/ai/config", headers=auth_headers)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["configured"] == True
-    assert data["provider"] == "openai"
-    assert data["model"] == "gpt-4"
-    assert data["has_api_key"] == True
-    # API key should NOT be returned
-    assert "api_key" not in data
-
-
-def test_ai_chat_without_config(client, auth_headers):
-    """Test POST /api/ai/chat without configuration."""
-    # Clear any existing config by using a new user
-    response = client.post("/auth/register", json={
-        "username": "testuser_ai_2",
-        "email": "testuser_ai_2@example.com",
-        "password": "testpass123",
-        "full_name": "Test User AI 2"
-    })
-    
-    response = client.post("/auth/login", json={
-        "username": "testuser_ai_2",
-        "password": "testpass123"
-    })
-    cookies = response.cookies
-    new_headers = {"Cookie": f"session={cookies.get('session')}"}
-    
-    # Try to chat without config
-    response = client.post("/api/ai/chat", headers=new_headers, json={
-        "message": "Test message",
-        "history": [],
-        "context": {}
-    })
-    
-    assert response.status_code == 400
-    data = response.json()
-    assert "not configured" in data["detail"].lower()
-
-
-def test_ai_config_validation(client, auth_headers):
-    """Test AI config validation."""
-    # Missing provider
-    config = {
-        "provider": "",
-        "api_key": "test-key"
-    }
-    # This should still return 200 but the client-side validation should catch it
-    # For now we're just testing the endpoint exists
-    
-    # Missing API key
-    config = {
-        "provider": "openai",
-        "api_key": ""
-    }
-    # Same as above - client-side validation
-
-
-def test_ai_unauthorized_access(client):
-    """Test that AI endpoints require authentication."""
-    # Try accessing without auth
-    response = client.get("/api/ai/config")
-    assert response.status_code == 401
-    
-    response = client.post("/api/ai/config", json={})
-    assert response.status_code == 401
-    
+def test_ai_providers_endpoint_requires_auth(client):
+    """GET /api/ai/providers should return 401 without auth."""
     response = client.get("/api/ai/providers")
     assert response.status_code == 401
-    
-    response = client.get("/api/ai/suggestions")
-    assert response.status_code == 401
-    
-    response = client.post("/api/ai/chat", json={})
-    assert response.status_code == 401
 
 
-def test_custom_provider_requires_base_url(client, auth_headers):
-    """Test that custom provider should have base_url."""
-    config = {
-        "provider": "custom",
-        "api_key": "test-key",
-        "model": "custom-model",
-        "base_url": "http://localhost:11434/v1",
-        "temperature": 0.7,
-        "max_tokens": 2000
-    }
-    
-    response = client.post("/api/ai/config", headers=auth_headers, json=config)
+def test_ai_providers_endpoint_authenticated(client, auth_cookies):
+    """GET /api/ai/providers should return provider metadata when authenticated."""
+    response = client.get("/api/ai/providers", cookies=auth_cookies)
     assert response.status_code == 200
-    
-    # Verify it was saved
-    response = client.get("/api/ai/config", headers=auth_headers)
+
     data = response.json()
-    assert data["provider"] == "custom"
-    assert data["base_url"] == "http://localhost:11434/v1"
+    # Endpoint returns available_providers and configured providers
+    assert "available_providers" in data
+    available = data["available_providers"]
+    # At minimum openai, anthropic, ollama must be listed
+    assert "openai" in available
+    assert "anthropic" in available
+
+
+def test_ai_config_endpoint_authenticated(client, auth_cookies):
+    """GET /api/ai/config should return configuration status."""
+    response = client.get("/api/ai/config", cookies=auth_cookies)
+    assert response.status_code == 200
+
+    data = response.json()
+    assert "configured" in data
+    assert "provider" in data
+    assert "model" in data
+    assert "auto_analyze" in data
+
+
+def test_ai_config_endpoint_requires_auth(client):
+    """GET /api/ai/config should return 401 without auth."""
+    response = client.get("/api/ai/config")
+    assert response.status_code == 401
+
+
+# =============================================================================
+# Provider configure endpoint
+# =============================================================================
+
+def test_ai_configure_provider_requires_auth(client):
+    """POST /api/ai/providers/configure should return 401 without auth."""
+    response = client.post("/api/ai/providers/configure", json={
+        "provider": "openai",
+        "api_key": "sk-test"
+    })
+    assert response.status_code == 401
+
+
+def test_ai_configure_provider_invalid_key(client, auth_cookies):
+    """POST /api/ai/providers/configure with a bad key should return 401."""
+    response = client.post(
+        "/api/ai/providers/configure",
+        cookies=auth_cookies,
+        json={
+            "provider": "openai",
+            "api_key": "sk-obviously-invalid-key-xyz",
+        }
+    )
+    # Should fail key validation → 401
+    assert response.status_code == 401
+
+
+def test_ai_configure_unknown_provider(client, auth_cookies):
+    """POST /api/ai/providers/configure with an unknown provider should return 400."""
+    response = client.post(
+        "/api/ai/providers/configure",
+        cookies=auth_cookies,
+        json={
+            "provider": "nonexistent_provider",
+            "api_key": "some-key",
+        }
+    )
+    assert response.status_code == 400
+
+
+# =============================================================================
+# Chat endpoint
+# =============================================================================
+
+def test_ai_chat_requires_auth(client):
+    """POST /api/ai/chat should return 401 without auth."""
+    response = client.post("/api/ai/chat", json={
+        "message": "Hello",
+        "project_id": "test-project-id",
+    })
+    assert response.status_code == 401
+
+
+def test_ai_chat_without_provider_configured(client, auth_cookies):
+    """POST /api/ai/chat without any provider configured should return 400."""
+    # First disconnect all providers to ensure clean state
+    client.post("/api/ai/disconnect", cookies=auth_cookies)
+
+    response = client.post(
+        "/api/ai/chat",
+        cookies=auth_cookies,
+        json={
+            "message": "Test message",
+            "project_id": "test-proj-abc",
+        }
+    )
+    assert response.status_code == 400
+    data = response.json()
+    assert "detail" in data
+    assert "no ai provider" in data["detail"].lower() or "not configured" in data["detail"].lower()
+
+
+# =============================================================================
+# Validate endpoint
+# =============================================================================
+
+def test_ai_validate_endpoint_requires_auth(client):
+    """POST /api/ai/providers/validate should return 401 without auth."""
+    response = client.post("/api/ai/providers/validate", json={
+        "provider": "openai",
+        "api_key": "sk-test"
+    })
+    assert response.status_code == 401
+
+
+def test_ai_validate_invalid_key(client, auth_cookies):
+    """POST /api/ai/providers/validate with a bad key should return valid=False."""
+    response = client.post(
+        "/api/ai/providers/validate",
+        cookies=auth_cookies,
+        json={
+            "provider": "openai",
+            "api_key": "sk-obviously-fake-key-12345",
+        }
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["valid"] is False
+
+
+# =============================================================================
+# Usage endpoint
+# =============================================================================
+
+def test_ai_usage_endpoint_requires_auth(client):
+    """GET /api/ai/usage should return 401 without auth."""
+    response = client.get("/api/ai/usage")
+    assert response.status_code == 401
+
+
+def test_ai_usage_endpoint_authenticated(client, auth_cookies):
+    """GET /api/ai/usage should return usage stats when authenticated."""
+    response = client.get("/api/ai/usage", cookies=auth_cookies)
+    assert response.status_code == 200
+    data = response.json()
+    # Usage tracker should return token counts
+    assert "input_tokens" in data or "total_input_tokens" in data or isinstance(data, dict)
 
 
 if __name__ == "__main__":

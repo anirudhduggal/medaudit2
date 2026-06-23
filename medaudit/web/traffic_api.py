@@ -115,7 +115,7 @@ def generate_network_graph(analysis_results: dict) -> dict:
     
     cytoscape_edges = []
     for edge_key, data in edge_data.items():
-        src, dst = edge_key.split("_")
+        src, dst = edge_key.split("_", 1)
         
         # Determine edge type
         edge_type = "normal"

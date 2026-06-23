@@ -11,6 +11,7 @@ import subprocess
 import signal
 import psutil
 import logging
+import sys
 from .database import get_db, User
 from .auth import require_auth
 
@@ -86,7 +87,7 @@ async def start_proxy(
         # Start proxy process
         process = subprocess.Popen(
             [
-                "python3", "-m", "medaudit.proxy.proxy_server",
+                sys.executable, "-m", "medaudit.proxy.proxy_server",
                 "--host", "0.0.0.0",
                 "--port", str(proxy_port),
                 "--hl7-host", hl7_host,

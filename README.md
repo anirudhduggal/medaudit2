@@ -184,6 +184,7 @@ python -m medaudit.fuzzer run -c config.yaml -o results.json
 | `fuzzer test` | Test connection to server | `python -m medaudit.fuzzer test --host localhost --port 2575` |
 | `fuzzer server` | Start malicious server | `python -m medaudit.fuzzer server --mode no_ack` |
 | `fuzzer attacks`| List fuzzer attack modes | `python -m medaudit.fuzzer attacks` |
+| `mcp` | Start Model Context Protocol server | `python -m medaudit mcp` |
 
 ### Web Server Options
 

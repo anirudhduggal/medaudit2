@@ -359,7 +359,14 @@ async def create_user(
     new_user.set_password(request_data.password)
     
     db.add(new_user)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Username '{request_data.username}' conflicts with an existing account. Please choose a different username."
+        )
     db.refresh(new_user)
     
     return {
