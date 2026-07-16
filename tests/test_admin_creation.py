@@ -53,18 +53,20 @@ def test_admin_creation():
             assert admin2.verify_password(random_pwd), "Random password verification failed!"
             
             print(f"\n✓ All tests passed!")
-            return True
-            
+
         except Exception as e:
             print(f"\n❌ Test failed: {e}")
             import traceback
             traceback.print_exc()
-            return False
+            raise
         finally:
             session.close()
             # Explicitly dispose the engine to release the SQLite file lock on Windows
             db_manager.engine.dispose()
 
 if __name__ == "__main__":
-    success = test_admin_creation()
-    sys.exit(0 if success else 1)
+    try:
+        test_admin_creation()
+        sys.exit(0)
+    except Exception:
+        sys.exit(1)

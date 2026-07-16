@@ -36,6 +36,36 @@ def pytest_configure(config):
 import pytest
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _isolate_database(tmp_path_factory):
+    """
+    Point ALL database access at a throwaway SQLite file for the whole test
+    session, so tests never touch the real medaudit.db.
+
+    Both get_db_manager() (used directly by tests) and the get_db() FastAPI
+    dependency (used by the app under TestClient) resolve the module-level
+    _db_manager singleton at call time, so overriding it here isolates both.
+    Without this, auth tests call create_or_update_admin() against the real DB
+    and reset the operator's admin password (and leave junk projects behind).
+    """
+    from medaudit.web import database
+
+    tmp_db = tmp_path_factory.mktemp("medaudit_testdb") / "test.db"
+    test_manager = database.DatabaseManager(db_path=tmp_db)
+    test_manager.create_tables()
+
+    original = database._db_manager
+    database._db_manager = test_manager
+    try:
+        yield test_manager
+    finally:
+        database._db_manager = original
+        try:
+            test_manager.engine.dispose()
+        except Exception:
+            pass
+
+
 @pytest.fixture(scope="session")
 def workspace_root():
     """Return the workspace root directory."""
