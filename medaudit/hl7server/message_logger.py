@@ -222,7 +222,7 @@ class MessageLogger:
 
             with self.write_lock:
                 with open(log_file, 'a') as f:
-                    f.write(json.dumps(log_entry) + '\n')
+                    f.write(json.dumps(log_entry, default=str) + '\n')
 
         except Exception as e:
             print(f"Error writing to log file: {e}")

@@ -117,13 +117,29 @@
             border-radius: 50%; width: 20px; height: 20px; font-size: 0.65rem;
             display: flex; align-items: center; justify-content: center; font-weight: 700;
         }
+        :root { --ai-sidebar-w: clamp(420px, 42vw, 760px); }
         .ai-sidebar {
-            position: fixed; right: -420px; top: 0; width: 400px; height: 100vh;
+            position: fixed; right: calc(-1 * var(--ai-sidebar-w) - 24px); top: 0;
+            width: var(--ai-sidebar-w); height: 100vh;
             background: #fff; box-shadow: -4px 0 20px rgba(0,0,0,0.15);
             z-index: 1040; display: flex; flex-direction: column;
             transition: right 0.3s ease-in-out;
         }
         .ai-sidebar.open { right: 0; }
+        /* Drag handle on the pane's left edge to resize it. */
+        .ai-resize-handle {
+            position: absolute; left: -3px; top: 0; width: 7px; height: 100%;
+            cursor: ew-resize; z-index: 1041; background: transparent;
+        }
+        .ai-resize-handle:hover, .ai-resize-handle.dragging { background: rgba(99,102,241,0.35); }
+        body.ai-resizing { user-select: none; cursor: ew-resize; }
+        body.ai-resizing .ai-sidebar { transition: none; }
+        body.ai-resizing.ai-sidebar-open { transition: none; }
+        /* On narrow screens the pane goes full-width and doesn't push content. */
+        @media (max-width: 900px) {
+            :root { --ai-sidebar-w: 100vw; }
+            body.ai-sidebar-open { margin-right: 0 !important; }
+        }
         .ai-sidebar-header {
             background: linear-gradient(135deg, #1e293b, #334155);
             color: #fff; padding: 0.75rem 1rem;
@@ -169,21 +185,16 @@
         .ai-typing span:nth-child(3) { animation-delay: 0.4s; }
         @keyframes typing { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
         
-        /* Adjust main content when sidebar is open */
-        body.ai-sidebar-open .container-fluid { margin-right: 400px; transition: margin-right 0.3s; }
+        /* Push the whole page left so the pane sits BESIDE the content, not over it.
+           Margin on <body> works because the sidebar is position:fixed (anchored to
+           the viewport); margin on .container-fluid just overflowed its width:100% box. */
+        body { transition: margin-right 0.3s ease-in-out; }
+        body.ai-sidebar-open { margin-right: var(--ai-sidebar-w); }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-dark">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="/dashboard">
-                <span class="brand-icon"><i class="bi bi-shield-check"></i></span> Medaudit 2.0
-            </a>
-            <div>
-                <a href="/dashboard" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-left me-1"></i>Projects</a>
-            </div>
-        </div>
-    </nav>
+    {% set show_back = true %}
+    {% include "_topbar.html" %}
 
     <div class="project-header">
         <div class="container-fluid">
@@ -211,6 +222,11 @@
         <li class="nav-item">
             <button class="nav-link" data-bs-toggle="tab" data-bs-target="#serverTab">
                 <i class="bi bi-hdd-rack tab-icon"></i>Server
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#findingsTab" onclick="loadFindings()">
+                <i class="bi bi-clipboard2-check tab-icon"></i>Findings
             </button>
         </li>
     </ul>
@@ -586,8 +602,37 @@
                 </div>
             </div>
 
+            <!-- FINDINGS TAB -->
+            <div class="tab-pane fade" id="findingsTab">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0"><i class="bi bi-clipboard2-check me-2"></i>Findings</h5>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-primary" onclick="loadFindings()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+                        <button class="btn btn-outline-success" onclick="exportFindings('csv')"><i class="bi bi-filetype-csv"></i> Export CSV</button>
+                        <button class="btn btn-outline-danger" onclick="exportFindings('pdf')"><i class="bi bi-file-earmark-pdf"></i> Report PDF</button>
+                    </div>
+                </div>
+                <p class="text-muted small">Consolidated findings from the Auto-Pentest agent and fuzzing jobs, ranked by severity.</p>
+                <div class="card">
+                    <div class="card-body p-0">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width:90px;">Severity</th><th>Title</th>
+                                    <th style="width:160px;">Source</th><th style="width:150px;">Target</th><th>Detail</th>
+                                </tr>
+                            </thead>
+                            <tbody id="findingsBody">
+                                <tr><td colspan="5" class="text-center text-muted py-4">Click Refresh to load findings</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
     <!-- AI SIDEBAR (persistent across all tabs) -->
     <div class="ai-sidebar" id="aiSidebar">
+        <div class="ai-resize-handle" id="aiResizeHandle" title="Drag to resize"></div>
         <div class="ai-sidebar-header">
             <div class="d-flex align-items-center gap-2">
                 <i class="bi bi-robot" style="font-size:1.2rem;"></i>
@@ -646,7 +691,13 @@
         
         <!-- Quick Actions -->
         <div class="ai-quick-actions p-2" id="aiQuickActions" style="display:none;">
-            <div class="d-flex gap-1 flex-wrap">
+            <div class="d-flex align-items-center justify-content-between mb-1">
+                <span class="text-muted" style="font-size:0.63rem; text-transform:uppercase; letter-spacing:0.6px;">Quick prompts</span>
+                <button class="btn btn-link btn-sm p-0 text-muted" onclick="clearChatHistory()" title="Clear chat history" style="font-size:0.7rem;">
+                    <i class="bi bi-trash"></i> clear
+                </button>
+            </div>
+            <div class="d-flex gap-1 flex-wrap mb-2">
                 <button class="btn btn-outline-primary btn-sm" onclick="sendQuickPrompt('status')" style="font-size:0.7rem;">
                     <i class="bi bi-clipboard-check"></i> Status
                 </button>
@@ -656,10 +707,38 @@
                 <button class="btn btn-outline-danger btn-sm" onclick="sendQuickPrompt('next')" style="font-size:0.7rem;">
                     <i class="bi bi-lightning"></i> Next Steps
                 </button>
-                <button class="btn btn-outline-secondary btn-sm" onclick="clearChatHistory()" style="font-size:0.7rem;">
-                    <i class="bi bi-trash"></i>
-                </button>
             </div>
+            <div class="d-flex align-items-center gap-2 mb-1" style="font-size:0.7rem;">
+                <select class="form-select form-select-sm" id="apIntensity" style="font-size:0.7rem; padding:2px 6px;" title="Test intensity">
+                    <option value="light">Light</option>
+                    <option value="standard" selected>Standard</option>
+                    <option value="thorough">Thorough</option>
+                </select>
+                <div class="form-check form-switch m-0" title="Let the AI narrate the approach">
+                    <input class="form-check-input" type="checkbox" id="apNarrate">
+                    <label class="form-check-label" for="apNarrate" style="font-size:0.7rem;">AI narration</label>
+                </div>
+            </div>
+            <button class="btn btn-dark btn-sm w-100 d-flex align-items-center justify-content-center gap-1" onclick="startAutoPentest()" id="autoPentestBtn" style="font-size:0.74rem;">
+                <i class="bi bi-robot"></i> Run Auto-Pentest
+            </button>
+            <div class="text-muted text-center mt-1" style="font-size:0.62rem;">
+                Recon → fuzz → exploit against the Client-tab target ·
+                <a href="#" onclick="showFuzzTechniques();return false;">techniques</a>
+            </div>
+        </div>
+
+        <!-- Auto-Pentest panel (shown while a run is active) -->
+        <div id="autoPentestPanel" style="display:none; border-top:1px solid #e2e8f0; padding:10px; max-height:320px; overflow-y:auto; font-size:0.75rem;">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <strong id="apTitle"><i class="bi bi-robot"></i> Auto-Pentest</strong>
+                <span id="apStatus" class="badge bg-secondary">idle</span>
+            </div>
+            <div id="apSteps"></div>
+            <div id="apApproval" style="display:none;" class="mt-2 p-2" style="background:#fff3cd;border-radius:6px;"></div>
+            <div id="apFindings" class="mt-2"></div>
+            <div id="apReport" class="mt-2"></div>
+            <button class="btn btn-link btn-sm p-0 mt-1" onclick="closeAutoPentest()" style="font-size:0.7rem;">close</button>
         </div>
         
         <!-- Chat Input -->
@@ -1156,19 +1235,34 @@
                 }
             }
             
+            // Safety guard: fuzzing a non-loopback target can crash live
+            // medical devices, so require explicit operator confirmation.
+            const isLoopback = /^(localhost|127\.\d+\.\d+\.\d+|::1|0:0:0:0:0:0:0:1)$/i.test(targetHost.trim());
+            let confirmTarget = false;
+            if (!isLoopback) {
+                confirmTarget = confirm(
+                    `Target "${targetHost}" is not localhost.\n\n` +
+                    `Fuzzing sends malformed HL7 traffic that can crash or disrupt ` +
+                    `live medical devices. Only proceed if you are authorized to ` +
+                    `test this host.\n\nStart fuzzing ${targetHost}:${targetPort}?`
+                );
+                if (!confirmTarget) return;   // operator declined
+            }
+
             const btn = document.getElementById('fuzzerStartBtn');
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Starting...';
-            
+
             try {
-                const params = new URLSearchParams({
-                    name: `Fuzz Job - ${targetHost}:${targetPort}`,
-                    config_format: format,
-                    config_content: config
-                });
-                
-                const response = await fetch(`/api/fuzzer/projects/${projectId}/jobs?${params.toString()}`, {
-                    method: 'POST'
+                const response = await fetch(`/api/fuzzer/projects/${projectId}/jobs`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: `Fuzz Job - ${targetHost}:${targetPort}`,
+                        config_format: format,
+                        config_content: config,
+                        confirm_target: confirmTarget
+                    })
                 });
                 const data = await response.json();
                 
@@ -1990,6 +2084,7 @@
             sendAIMessage();
         }
 
+        const _aiActions = [];   // registry so action buttons reference data by index, not inline JSON
         function addChatMessage(role, content, actions, usage) {
             const chatArea = document.getElementById('aiChatArea');
             if (chatArea.querySelector('.text-center')) chatArea.innerHTML = '';
@@ -2013,12 +2108,14 @@
             
             let html = `<div class="ai-msg-bubble">${formattedContent}`;
             
-            // Add action buttons
+            // Add action buttons. Reference actions by index (never embed the JSON
+            // in the onclick attribute — action data contains single quotes, e.g.
+            // SQLi payloads, which break an inline onclick and make it a no-op).
             if (actions && actions.length > 0) {
                 html += '<div class="mt-2">';
                 for (const action of actions) {
-                    const actionData = encodeURIComponent(JSON.stringify(action));
-                    html += `<button class="ai-action-btn" onclick="executeAIAction('${actionData}')">
+                    const idx = _aiActions.push(action) - 1;
+                    html += `<button class="ai-action-btn" onclick="executeAIAction(${idx})">
                         <i class="bi bi-play-fill"></i> ${escapeHtml(action.label || action.type)}
                     </button>`;
                 }
@@ -2039,9 +2136,10 @@
             chatArea.scrollTop = chatArea.scrollHeight;
         }
 
-        async function executeAIAction(encodedAction) {
-            const action = JSON.parse(decodeURIComponent(encodedAction));
-            
+        async function executeAIAction(idx) {
+            const action = _aiActions[idx];
+            if (!action) return;
+
             if (!confirm(`Execute action: ${action.label || action.type}?`)) return;
             
             try {
@@ -2078,6 +2176,269 @@
                     <i class="bi bi-robot" style="font-size:2rem; opacity:0.3;"></i>
                     <p class="small mt-2">Chat cleared. Ask me anything about your pentest.</p>
                 </div>`;
+        }
+
+        // ---------------- Auto-Pentest agent ----------------
+        let apRunId = null;
+        let apPollTimer = null;
+
+        async function startAutoPentest() {
+            const host = (document.getElementById('clientHost')?.value || 'localhost').trim();
+            const port = parseInt(document.getElementById('clientPort')?.value || '2575');
+            const useTLS = document.getElementById('clientTLS')?.checked || false;
+            const isLoopback = /^(localhost|127\.\d+\.\d+\.\d+|::1)$/i.test(host);
+            let confirmTarget = false;
+            if (!isLoopback) {
+                confirmTarget = confirm(`Target "${host}" is not localhost.\n\nAuto-Pentest sends malformed and exploit traffic that can disrupt live medical devices. Only proceed if authorized to test this host.\n\nRun Auto-Pentest against ${host}:${port}?`);
+                if (!confirmTarget) return;
+            }
+            // Default viewer URL for the stored-XSS oracle (the demo hospital viewer).
+            const viewerUrl = prompt('Clinical viewer URL for stored-XSS verification (blank to skip):', 'http://localhost:8081/') || null;
+
+            document.getElementById('autoPentestBtn').disabled = true;
+            document.getElementById('autoPentestPanel').style.display = 'block';
+            document.getElementById('apReport').innerHTML = '';
+            document.getElementById('apFindings').innerHTML = '';
+            document.getElementById('apSteps').innerHTML = '<div class="text-muted">Starting…</div>';
+
+            try {
+                const intensity = document.getElementById('apIntensity')?.value || 'standard';
+                const narrate = document.getElementById('apNarrate')?.checked || false;
+                const r = await fetch('/api/ai/auto-pentest/start', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ project_id: projectId, target_host: host, target_port: port,
+                        use_tls: useTLS, viewer_url: viewerUrl, confirm_target: confirmTarget,
+                        intensity, llm_narrate: narrate })
+                });
+                const data = await r.json();
+                if (!r.ok) {
+                    const hint = (r.status === 404)
+                        ? 'This endpoint is missing on the running server — it was likely started before the Auto-Pentest feature was added. Restart the medaudit server, then retry.'
+                        : (data.detail || 'error');
+                    apFail(`Could not start (HTTP ${r.status}): ${hint}`);
+                    return;
+                }
+                apRunId = data.run_id;
+                apFailCount = 0;
+                apPollTimer = setInterval(pollAutoPentest, 1200);
+            } catch (e) { apFail('Error: ' + e.message); }
+        }
+
+        function apFail(msg) {
+            document.getElementById('apSteps').innerHTML =
+                `<div class="text-danger" style="white-space:pre-wrap;">⚠ ${escapeHtml(msg)}</div>`;
+            document.getElementById('apStatus').className = 'badge bg-danger';
+            document.getElementById('apStatus').textContent = 'failed';
+            if (apPollTimer) { clearInterval(apPollTimer); apPollTimer = null; }
+            resetAutoPentestBtn();
+        }
+
+        let apFailCount = 0;
+        async function pollAutoPentest() {
+            if (!apRunId) return;
+            try {
+                const r = await fetch(`/api/ai/auto-pentest/${apRunId}`);
+                if (!r.ok) {
+                    if (++apFailCount >= 3) apFail(`Lost the run (HTTP ${r.status}). The server may have restarted mid-run.`);
+                    return;
+                }
+                apFailCount = 0;
+                const s = await r.json();
+                renderAutoPentest(s);
+                if (['completed', 'refused', 'error'].includes(s.status)) {
+                    clearInterval(apPollTimer); apPollTimer = null; resetAutoPentestBtn();
+                }
+            } catch (e) {
+                if (++apFailCount >= 5) apFail('Lost connection to the server while polling.');
+            }
+        }
+
+        function renderAutoPentest(s) {
+            const badge = { running: 'bg-primary', awaiting_approval: 'bg-warning text-dark',
+                completed: 'bg-success', refused: 'bg-danger', error: 'bg-danger' }[s.status] || 'bg-secondary';
+            const st = document.getElementById('apStatus');
+            st.className = 'badge ' + badge; st.textContent = s.status.replace('_', ' ');
+
+            // Approach narrative (LLM) + coverage summary at the top.
+            let head = '';
+            if (s.approach) head += `<div class="fst-italic text-muted mb-2" style="font-size:0.72rem;">🧠 ${escapeHtml(s.approach)}</div>`;
+            const cov = s.coverage || {};
+            if (cov.finding || cov.clean || cov.skipped || cov.error) {
+                head += `<div class="mb-2" style="font-size:0.7rem;">Coverage: ` +
+                    `<span class="badge bg-danger">${cov.finding||0} findings</span> ` +
+                    `<span class="badge bg-success">${cov.clean||0} clean</span> ` +
+                    `<span class="badge bg-secondary">${cov.skipped||0} not tested</span>` +
+                    (cov.error ? ` <span class="badge bg-warning text-dark">${cov.error} errored</span>` : '') + `</div>`;
+            }
+            // Live fuzz progress bar.
+            if (s.fuzz_progress) {
+                const fp = s.fuzz_progress;
+                head += `<div class="mb-2" style="font-size:0.68rem;">Fuzzing… ${fp.sent} sent, ${fp.interesting} interesting
+                    <div class="progress" style="height:5px;"><div class="progress-bar" style="width:${fp.progress}%"></div></div></div>`;
+            }
+
+            // Steps: reasoning (agent "thinking") shown distinctly from check verdicts.
+            const stepsHtml = (s.steps || []).map(step => {
+                if (step.kind === 'reasoning') {
+                    return `<div class="mb-1" style="font-size:0.72rem;"><span title="agent reasoning">🤔</span> <em class="text-muted">${escapeHtml(step.detail)}</em></div>`;
+                }
+                const icon = { finding: '🚨', clean: '✅', skipped: '⏭️', error: '❌', done: '✅', running: '⏳', info: 'ℹ️' }[step.status] || '•';
+                return `<div style="font-size:0.73rem;">${icon} <strong>${escapeHtml(step.phase)}</strong>: ${escapeHtml(step.title)}` +
+                    (step.detail ? `<div class="text-muted ms-3">${escapeHtml(step.detail)}</div>` : '') + `</div>`;
+            }).join('');
+
+            // Fuzzing transparency detail (strategies + sample payloads + detection).
+            let fuzzHtml = '';
+            if (s.fuzz_detail && s.fuzz_detail.strategies) {
+                const fd = s.fuzz_detail;
+                fuzzHtml = `<details class="mt-1" style="font-size:0.7rem;"><summary>Fuzzing detail (${fd.total_sent} cases, ${fd.interesting} interesting)</summary>
+                    <div class="ms-2 mt-1">` +
+                    fd.strategies.map(x => `<div><strong>${escapeHtml(x.name)}</strong> — ${x.cases} cases on ${escapeHtml(x.field)}
+                        <div class="text-muted" style="font-family:monospace;">e.g. ${x.samples.map(escapeHtml).join(' · ')}</div></div>`).join('') +
+                    `<div class="text-muted mt-1">${escapeHtml(fd.detection)}</div></div></details>`;
+            }
+
+            document.getElementById('apSteps').innerHTML = head + stepsHtml + fuzzHtml;
+
+            const ap = document.getElementById('apApproval');
+            if (s.status === 'awaiting_approval' && s.pending) {
+                ap.style.display = 'block';
+                ap.innerHTML = `<div style="background:#fff3cd;border-radius:6px;padding:8px;">
+                    <div class="fw-bold text-danger">⚠ Approval required: ${escapeHtml(s.pending.title)}</div>
+                    <div class="small my-1">${escapeHtml(s.pending.description)}</div>
+                    <code style="font-size:0.68rem;word-break:break-all;">${escapeHtml(s.pending.payload_preview || '')}</code>
+                    <div class="mt-2 d-flex gap-1">
+                        <button class="btn btn-danger btn-sm" style="font-size:0.7rem;" onclick="approveExploit(true)">Approve &amp; exploit</button>
+                        <button class="btn btn-outline-secondary btn-sm" style="font-size:0.7rem;" onclick="approveExploit(false)">Decline</button>
+                    </div></div>`;
+            } else { ap.style.display = 'none'; ap.innerHTML = ''; }
+
+            if (s.findings && s.findings.length) {
+                document.getElementById('apFindings').innerHTML = '<div class="fw-bold mt-1">Findings</div>' +
+                    s.findings.map(f => {
+                        const col = { Critical: '#c0392b', High: '#e67e22', Medium: '#d4a017', Low: '#7f8c8d' }[f.severity] || '#7f8c8d';
+                        return `<div class="mt-1"><span class="badge" style="background:${col};">${f.severity}</span> ${escapeHtml(f.title)}${f.confirmed ? '' : ' <em>(unverified)</em>'}</div>`;
+                    }).join('');
+            }
+            // Keep the pane lightweight: no full report text here. On completion,
+            // show a short note + actions (findings live in the Findings tab; the
+            // full report is available as a PDF export).
+            if (s.status === 'completed') {
+                document.getElementById('apReport').innerHTML =
+                    `<div class="small text-success mt-2"><i class="bi bi-check-circle"></i> Run complete — ${(s.findings || []).length} finding(s) recorded.</div>
+                     <div class="d-flex gap-1 mt-1">
+                        <button class="btn btn-outline-secondary btn-sm" style="font-size:0.7rem;" onclick="openFindingsTab()"><i class="bi bi-clipboard2-check"></i> View in Findings</button>
+                        <button class="btn btn-outline-danger btn-sm" style="font-size:0.7rem;" onclick="exportFindings('pdf')"><i class="bi bi-file-earmark-pdf"></i> Report PDF</button>
+                     </div>`;
+            } else if (s.error) {
+                document.getElementById('apReport').innerHTML = `<div class="text-danger mt-2">${escapeHtml(s.error)}</div>`;
+            } else {
+                document.getElementById('apReport').innerHTML = '';
+            }
+        }
+
+        async function showFuzzTechniques() {
+            let techniques = [];
+            try {
+                const r = await fetch('/api/ai/fuzzing-techniques');
+                techniques = (await r.json()).techniques || [];
+            } catch (e) { alert('Could not load techniques: ' + e.message); return; }
+            const rows = techniques.map(t =>
+                `<tr><td class="fw-bold">${escapeHtml(t.name)}</td><td class="small">${escapeHtml(t.targets)}</td>` +
+                `<td class="small text-muted" style="font-family:monospace;">${t.examples.map(escapeHtml).join('<br>')}</td></tr>`).join('');
+            const html = `<div class="modal fade" id="techModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content"><div class="modal-header"><h5 class="modal-title"><i class="bi bi-bug me-2"></i>HL7 Fuzzing Techniques</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body"><p class="small text-muted">The mutation families the fuzzer and Auto-Pentest agent can execute against HL7 fields, delimiters, and segments.</p>
+                <table class="table table-sm"><thead><tr><th>Technique</th><th>Targets</th><th>Example payloads</th></tr></thead><tbody>${rows}</tbody></table></div></div></div></div>`;
+            document.getElementById('techModalHost')?.remove();
+            const host = document.createElement('div'); host.id = 'techModalHost'; host.innerHTML = html;
+            document.body.appendChild(host);
+            new bootstrap.Modal(document.getElementById('techModal')).show();
+        }
+
+        async function approveExploit(approved) {
+            if (!apRunId) return;
+            await fetch(`/api/ai/auto-pentest/${apRunId}/approve`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ approved })
+            });
+        }
+
+        function resetAutoPentestBtn() {
+            const b = document.getElementById('autoPentestBtn');
+            if (b) b.disabled = false;
+        }
+        function closeAutoPentest() {
+            if (apPollTimer) { clearInterval(apPollTimer); apPollTimer = null; }
+            document.getElementById('autoPentestPanel').style.display = 'none';
+            apRunId = null; resetAutoPentestBtn();
+        }
+
+        // ---------------- Findings tab ----------------
+        async function loadFindings() {
+            const body = document.getElementById('findingsBody');
+            body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Loading…</td></tr>';
+            try {
+                const r = await fetch(`/api/ai/projects/${projectId}/findings`);
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                const items = data.findings || [];
+                if (!items.length) {
+                    body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No findings yet. Run the Fuzzer or Auto-Pentest, then Refresh.</td></tr>';
+                    return;
+                }
+                const col = { Critical:'#c0392b', High:'#e67e22', Medium:'#d4a017', Low:'#7f8c8d', Info:'#95a5a6' };
+                body.innerHTML = items.map((f, i) => {
+                    const steps = (f.steps || []).map(s => `<li>${escapeHtml(s)}</li>`).join('');
+                    const sec = (label, val, pre) => !val ? '' :
+                        `<div class="fw-bold small mt-2">${label}</div>` +
+                        (pre ? `<pre class="small mb-0" style="white-space:pre-wrap;background:#f4f6f9;padding:8px;border-radius:6px;">${escapeHtml(val)}</pre>`
+                             : `<div class="small">${escapeHtml(val)}</div>`);
+                    const detail = `
+                        <tr class="finding-detail" id="fd-${i}" style="display:none;">
+                          <td colspan="5" style="background:#fbfcfe;">
+                            <div class="p-2">
+                              ${f.description ? `<div class="small">${escapeHtml(f.description)}</div>` : ''}
+                              ${steps ? `<div class="fw-bold small mt-2">Steps to reproduce</div><ol class="small mb-0">${steps}</ol>` : ''}
+                              ${sec('Payload sent', f.payload, true)}
+                              ${sec('Observed evidence', f.detail, true)}
+                              ${sec('Impact', f.impact)}
+                              ${sec('Remediation', f.remediation)}
+                            </div>
+                          </td>
+                        </tr>`;
+                    return `
+                        <tr style="cursor:pointer;" onclick="toggleFinding(${i})">
+                            <td><span class="badge" style="background:${col[f.severity]||'#7f8c8d'};">${escapeHtml(f.severity)}</span></td>
+                            <td><i class="bi bi-chevron-right me-1" id="fc-${i}"></i>${escapeHtml(f.title)}${f.confirmed ? '' : ' <em class="text-muted">(unverified)</em>'}</td>
+                            <td class="small">${escapeHtml(f.source)}</td>
+                            <td class="small text-muted">${escapeHtml(f.target || '')}</td>
+                            <td class="small text-muted">${escapeHtml((f.detail || '').slice(0, 100))}</td>
+                        </tr>${detail}`;
+                }).join('');
+            } catch (e) {
+                body.innerHTML = `<tr><td colspan="5" class="text-danger py-3">Failed to load findings: ${escapeHtml(e.message)}</td></tr>`;
+            }
+        }
+
+        function toggleFinding(i) {
+            const d = document.getElementById('fd-' + i), c = document.getElementById('fc-' + i);
+            const open = d.style.display === 'none';
+            d.style.display = open ? 'table-row' : 'none';
+            if (c) c.className = open ? 'bi bi-chevron-down me-1' : 'bi bi-chevron-right me-1';
+        }
+
+        function exportFindings(kind) {
+            const url = kind === 'csv'
+                ? `/api/ai/projects/${projectId}/findings.csv`
+                : `/api/ai/projects/${projectId}/report.pdf`;
+            window.open(url, '_blank');   // browser sends the session cookie; downloads the file
+        }
+
+        function openFindingsTab() {
+            const b = document.querySelector('[data-bs-target="#findingsTab"]');
+            if (b) { b.click(); loadFindings(); }
         }
 
         async function disconnectAI() {
@@ -2168,17 +2529,75 @@
             pollAIInsights();
         }
 
+        // ---------------- Resizable AI pane (drag the left edge) ----------------
+        (function initResize() {
+            const handle = document.getElementById('aiResizeHandle');
+            if (!handle) return;
+            const saved = localStorage.getItem('aiSidebarWidth');
+            if (saved) document.documentElement.style.setProperty('--ai-sidebar-w', saved);
+            let dragging = false;
+            handle.addEventListener('mousedown', e => {
+                dragging = true; document.body.classList.add('ai-resizing');
+                handle.classList.add('dragging'); e.preventDefault();
+            });
+            window.addEventListener('mousemove', e => {
+                if (!dragging) return;
+                let w = window.innerWidth - e.clientX;              // distance from right edge
+                w = Math.max(340, Math.min(w, window.innerWidth - 200));
+                document.documentElement.style.setProperty('--ai-sidebar-w', w + 'px');
+            });
+            window.addEventListener('mouseup', () => {
+                if (!dragging) return;
+                dragging = false; document.body.classList.remove('ai-resizing');
+                handle.classList.remove('dragging');
+                localStorage.setItem('aiSidebarWidth',
+                    getComputedStyle(document.documentElement).getPropertyValue('--ai-sidebar-w').trim());
+            });
+        })();
+
+        // ---------------- Restore chat + auto-pentest state on load ----------------
+        async function restoreAIState() {
+            // Chat history
+            try {
+                const r = await fetch(`/api/ai/chat-history/${projectId}`);
+                const data = await r.json();
+                const hist = data.history || [];
+                if (hist.length) {
+                    document.getElementById('aiChatArea').innerHTML = '';
+                    for (const m of hist) {
+                        if (m.role === 'user' || m.role === 'assistant')
+                            addChatMessage(m.role, m.content);
+                    }
+                }
+            } catch (e) { /* no history */ }
+            // Latest auto-pentest run
+            try {
+                const r = await fetch(`/api/ai/projects/${projectId}/auto-pentest/latest`);
+                const data = await r.json();
+                if (data.run) {
+                    document.getElementById('autoPentestPanel').style.display = 'block';
+                    renderAutoPentest(data.run);
+                    if (data.run.status === 'awaiting_approval') {   // resume polling so Approve works
+                        apRunId = data.run.run_id; apFailCount = 0;
+                        apPollTimer = setInterval(pollAutoPentest, 1200);
+                    }
+                }
+            } catch (e) { /* no run */ }
+        }
+
         // Initialize
         loadProject();
-        
+
         // Poll server logs when Server tab is shown
         document.querySelector('button[data-bs-target="#serverTab"]').addEventListener('click', () => {
             loadServers();
             pollServerLogs();
         });
-        
+
         // Check AI config on load
         checkAIConfig();
+        // Restore prior chat + auto-pentest results (survives navigating away and back)
+        restoreAIState();
     </script>
 </body>
 </html>

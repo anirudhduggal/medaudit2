@@ -142,6 +142,17 @@ class ContextEngine:
         if sessions:
             sections.append(self._format_client_context(sessions))
         
+        # === Auto-Pentest Agent Results ===
+        # So chat / quick-prompts (status, vulns, next steps) know what the
+        # semi-autonomous agent tested and found.
+        try:
+            from .autopentest import get_project_summary
+            ap_summary = get_project_summary(project_id)
+            if ap_summary:
+                sections.append(ap_summary)
+        except Exception:  # noqa: BLE001
+            pass
+
         # === Recent Events ===
         with self._lock:
             recent_events = self._events[-30:]  # Last 30 events
@@ -249,7 +260,7 @@ class ContextEngine:
             findings = job.findings or (live_status.get("findings", []) if live_status else [])
             if findings:
                 lines.append(f"- **Findings ({len(findings)}):**")
-                for f in findings[-5]:  # Last 5 findings
+                for f in findings[-5:]:  # Last 5 findings
                     finding_type = f.get("finding_type", "unknown")
                     rule = f.get("rule", "unknown")
                     lines.append(f"  - [{finding_type}] {rule}: {f.get('mutation', '')[:100]}")

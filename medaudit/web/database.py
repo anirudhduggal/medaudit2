@@ -10,11 +10,34 @@ from typing import Optional, List
 from pathlib import Path
 
 from sqlalchemy import create_engine, Column, String, DateTime, Boolean, Text, Integer, ForeignKey, JSON
+from sqlalchemy.types import TypeDecorator
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, Session
 import hashlib
 import secrets
 import hmac
+
+
+class EncryptedString(TypeDecorator):
+    """
+    Transparently encrypts a string column at rest using the local sidecar DEK
+    (see medaudit.web.ai.crypto). Values are encrypted on write and decrypted on
+    read, so application code keeps using the attribute as a plain string.
+
+    A value that cannot be decrypted (missing keyfile, rotated key, or a legacy
+    plaintext row) reads back as None; callers treat that as "credential
+    unavailable, re-enter" rather than crashing.
+    """
+    impl = String
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        from medaudit.web.ai import crypto
+        return crypto.encrypt(value)
+
+    def process_result_value(self, value, dialect):
+        from medaudit.web.ai import crypto
+        return crypto.decrypt(value)
 
 # Import centralized paths
 from medaudit.utils import get_database_path, DATABASE_PATH
@@ -443,8 +466,9 @@ class AICredential(Base):
     # Provider type (anthropic, openai, gemini, ollama, etc.)
     provider = Column(String(50), nullable=False)
     
-    # API key (stored in database for persistence)
-    api_key = Column(String(2000), nullable=False)
+    # API key (encrypted at rest via the local sidecar DEK; see EncryptedString).
+    # Ciphertext is longer than the plaintext key, hence the generous width.
+    api_key = Column(EncryptedString(2000), nullable=False)
     
     # Optional configuration
     base_url = Column(String(500), nullable=True)  # For custom/Ollama endpoints
@@ -478,10 +502,33 @@ class AICredential(Base):
             "validation_error": self.validation_error,
         }
         if include_keys:
-            # Only include masked key
-            masked = f"sk-...{self.api_key[-8:]}" if len(self.api_key) > 8 else "sk-..."
+            # Only include a masked key. self.api_key may be None if the stored
+            # value could not be decrypted (rotated/lost keyfile, legacy row).
+            key = self.api_key
+            if not key:
+                masked = "unavailable (re-enter key)"
+            elif len(key) > 8:
+                masked = f"sk-...{key[-8:]}"
+            else:
+                masked = "sk-..."
             result["api_key_masked"] = masked
         return result
+
+
+class ProviderCredential(Base):
+    """
+    Globally-configured AI provider credential (from the Settings page), persisted
+    so it survives restarts. One row per provider type. The API key is encrypted
+    at rest via EncryptedString (see the sidecar-DEK design in medaudit.web.ai.crypto).
+    """
+    __tablename__ = "provider_credentials"
+
+    provider = Column(String(50), primary_key=True)          # anthropic, openai, openrouter, gemini, ollama
+    api_key = Column(EncryptedString(2000), nullable=True)   # nullable: Ollama uses base_url, no key
+    base_url = Column(String(500), nullable=True)
+    default_model = Column(String(200), nullable=True)
+    is_active = Column(Boolean, default=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 # Database session management
@@ -503,24 +550,33 @@ class DatabaseManager:
     
     def create_or_update_admin(self, session: Session, password: str = None, generate_random: bool = False):
         """
-        Create or update admin user with specified password.
-        
-        Default credentials: username='admin', password='admin123'
-        For production, use --password flag to set a custom password or --generate-password for random.
+        Ensure the admin user exists, setting/rotating its password only when asked.
+
+        Behavior:
+          * No admin yet (first run): create it. Use ``password`` if given,
+            otherwise generate a random one.
+          * Admin exists + ``generate_random``: rotate to a new random password.
+          * Admin exists + explicit ``password``: set that password.
+          * Admin exists + neither (a plain restart): leave the password
+            untouched.
+
+        Returns ``(admin, password)`` where ``password`` is the new password to
+        display, or ``None`` when the existing password was preserved (nothing
+        new to show).
         """
         import secrets
         import string
-        
-        # generate random password if no password is specified
-        if generate_random or password is None:
-            # Generate a cryptographically secure random password
+
+        def _generate() -> str:
             # 20 chars from alphanumeric + special = ~130 bits of entropy
             alphabet = string.ascii_letters + string.digits + "!@#$%^&*()-_=+"
-            password = ''.join(secrets.choice(alphabet) for _ in range(20))
-        
+            return ''.join(secrets.choice(alphabet) for _ in range(20))
+
         admin = session.query(User).filter(User.username == "admin").first()
-        
+
         if admin is None:
+            # First-time setup.
+            new_password = password or _generate()
             admin = User(
                 username="admin",
                 email="admin@medaudit.local",
@@ -528,12 +584,24 @@ class DatabaseManager:
                 is_admin=True
             )
             session.add(admin)
-        
-        admin.set_password(password)
+            admin.set_password(new_password)
+            session.commit()
+            session.refresh(admin)
+            return admin, new_password
+
+        # Admin already exists: only change the password on explicit request.
+        if generate_random:
+            new_password = _generate()
+        elif password is not None:
+            new_password = password
+        else:
+            # Plain restart -- preserve the current password.
+            return admin, None
+
+        admin.set_password(new_password)
         session.commit()
-        session.refresh(admin)  # Ensure changes are persisted
-        
-        return admin, password
+        session.refresh(admin)
+        return admin, new_password
 
 
 # Global database manager instance

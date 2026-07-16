@@ -18,11 +18,13 @@ import yaml
 import json
 import logging
 from datetime import datetime
+from itertools import islice
 from typing import Dict, Any, List, Optional, Generator
 from pydantic import BaseModel
 
 from .strategies import FuzzingStrategies
 from .protocol import send_hl7_message
+from .safety import check_authorization, apply_limits, TargetNotAuthorized
 
 logger = logging.getLogger(__name__)
 
@@ -371,26 +373,30 @@ def _generate_message_mutations(
 
 
 def run_fuzzing_job(
-    job_id: str, 
-    config: dict, 
+    job_id: str,
+    config: dict,
     db_session_factory=None,
     progress_callback=None,
-    project_id: str = None
+    project_id: str = None,
+    authorized: bool = False
 ) -> Dict[str, Any]:
     """
     Execute a fuzzing job.
-    
+
     This function runs the fuzzing campaign, sending mutated messages
     to the target and collecting results. It can run standalone or
     with database integration for the web UI.
-    
+
     Args:
         job_id: Unique identifier for this job
         config: Fuzzing configuration dictionary
         db_session_factory: Optional SQLAlchemy session factory for DB updates
         progress_callback: Optional callback(progress, stats) for progress updates
         project_id: Optional project ID for organizing logs
-        
+        authorized: Operator confirmation that a non-loopback target may be
+            fuzzed. Loopback targets ignore this; non-loopback targets are
+            refused unless it is True (see medaudit.fuzzer.safety).
+
     Returns:
         Dictionary containing job results:
         - status: Final status ('completed', 'stopped', 'error')
@@ -421,8 +427,35 @@ def run_fuzzing_job(
     
     db = None
     traffic_logger = None
-    
+
     try:
+        # --- Safety guardrails: refuse unauthorized non-loopback targets ---
+        # Do this before any side effects (traffic logger, DB "running" state).
+        target_host = config.get("target_host", "localhost")
+        try:
+            check_authorization(target_host, authorized)
+        except TargetNotAuthorized as e:
+            logger.warning("Fuzzing job %s refused: %s", job_id, e)
+            _active_jobs[job_id]["status"] = "refused"
+            _active_jobs[job_id]["error"] = str(e)
+            if db_session_factory:
+                try:
+                    from medaudit.web.database import FuzzingJob
+                    _db = db_session_factory()
+                    _job = _db.query(FuzzingJob).filter(FuzzingJob.id == job_id).first()
+                    if _job:
+                        _job.status = "refused"
+                        _db.commit()
+                    _db.close()
+                except Exception:
+                    pass
+            return {
+                "status": "refused",
+                "error": str(e),
+                "total_requests": 0,
+                "findings": [],
+            }
+
         # Initialize traffic logger
         job_name = config.get("name", f"Job {job_id[:8]}")
         
@@ -469,18 +502,22 @@ def run_fuzzing_job(
         delay_ms = config.get("delay_ms", 100)
         max_requests = config.get("max_requests", 1000)
         stop_on_error = config.get("stop_on_error", False)
-        target_host = config.get("target_host", "localhost")
+        # target_host already read above for the authorization check.
         target_port = config.get("target_port", 2575)
         use_tls = config.get("use_tls", False)
         timeout = config.get("timeout_seconds", 30)
-        
-        # Generate all messages (limited by max_requests)
-        messages = list(generate_fuzzed_messages(base_message, rules))
-        total = min(len(messages), max_requests)
-        
+
+        # Clamp volume and (for remote targets) send rate to safe bounds.
+        max_requests, delay_ms, _limit_notes = apply_limits(max_requests, delay_ms, target_host)
+
+        # Generate messages lazily and stop at max_requests so we never
+        # materialize an unbounded list (protects memory on large campaigns).
+        messages = list(islice(generate_fuzzed_messages(base_message, rules), max_requests))
+        total = len(messages) or 1
+
         findings = []
-        
-        for i, msg_data in enumerate(messages[:max_requests]):
+
+        for i, msg_data in enumerate(messages):
             # Check for stop signal
             if _active_jobs.get(job_id, {}).get("should_stop"):
                 logger.info(f"Job {job_id} stopped by user")

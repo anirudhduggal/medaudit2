@@ -93,6 +93,11 @@ docker-compose.override.yml
 *.sqlite
 *.sqlite3
 
+# At-rest encryption key for stored secrets -- MUST NOT be committed
+# (committing it alongside the DB would defeat encryption at rest)
+.secret_key
+**/.secret_key
+
 # Runtime logs
 logs/
 **/logs/

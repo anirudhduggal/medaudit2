@@ -214,8 +214,12 @@ class FuzzingTrafficLogger:
             "job_name": self.job_name,
             "start_time": self.start_time,
             "last_updated": datetime.utcnow().isoformat(),
-            "duration_seconds": (datetime.utcnow().fromisoformat(self.start_time) 
-                                 if isinstance(self.start_time, str) else None),
+            # Elapsed seconds since start. (Previously this produced a datetime
+            # object, which made the json.dump below fail on every write.)
+            "duration_seconds": (
+                (datetime.utcnow() - datetime.fromisoformat(self.start_time)).total_seconds()
+                if isinstance(self.start_time, str) else None
+            ),
             "statistics": self.stats,
             "log_files": {
                 "detailed": str(self.detailed_log),
@@ -226,7 +230,7 @@ class FuzzingTrafficLogger:
         
         try:
             with open(self.metadata_file, 'w') as f:
-                json.dump(metadata, f, indent=2)
+                json.dump(metadata, f, indent=2, default=str)
         except Exception as e:
             logger.error(f"Failed to write metadata: {e}")
     

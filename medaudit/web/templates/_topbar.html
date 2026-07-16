@@ -1,0 +1,119 @@
+<!-- Shared top navigation bar (included by dashboard/project/settings).
+     Set a show_back flag before including it to show a "Projects" back link. -->
+<style>
+    .medaudit-topbar.navbar { background: rgba(15, 23, 42, 0.97) !important; backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .medaudit-topbar .navbar-brand { font-weight: 700; font-size: 1.4rem; color: #fff; }
+    .medaudit-topbar .brand-icon { background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .medaudit-topbar .user-menu { color: rgba(255,255,255,0.78); }
+    .medaudit-topbar .user-menu:hover { color: #fff; }
+    .medaudit-topbar .dropdown-menu { border-radius: 12px; }
+</style>
+<nav class="navbar navbar-dark sticky-top medaudit-topbar">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/dashboard">
+            <span class="brand-icon"><i class="bi bi-shield-check"></i></span> Medaudit 2.0
+        </a>
+        <div class="d-flex align-items-center gap-2">
+            {% if show_back %}
+            <a href="/dashboard" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-left me-1"></i>Projects</a>
+            {% endif %}
+            <a href="/settings" class="btn btn-outline-light btn-sm" title="Settings"><i class="bi bi-gear"></i></a>
+            <div class="dropdown">
+                <button class="btn user-menu dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-person-circle me-1"></i> <span id="userName">Administrator</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#changePasswordModal"><i class="bi bi-key me-2"></i>Change Password</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="#" onclick="logout()"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<!-- Change Password Modal (shared) -->
+<div class="modal fade" id="changePasswordModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-key me-2"></i>Change Password</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="changePasswordForm">
+                <div class="modal-body">
+                    <div id="passwordAlert" class="alert d-none" role="alert"></div>
+                    <div class="mb-3">
+                        <label class="form-label">Current Password *</label>
+                        <input type="password" class="form-control" id="currentPassword" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">New Password *</label>
+                        <input type="password" class="form-control" id="newPassword" required minlength="8">
+                        <div class="form-text">Minimum 8 characters</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Confirm New Password *</label>
+                        <input type="password" class="form-control" id="confirmPassword" required minlength="8">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary text-white">Update Password</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Populate the header username and wire logout + change-password once.
+    (function () {
+        fetch('/auth/check').then(r => r.json()).then(d => {
+            if (d && d.user) {
+                const el = document.getElementById('userName');
+                if (el) el.textContent = d.user.full_name || d.user.username;
+            }
+        }).catch(() => {});
+
+        const form = document.getElementById('changePasswordForm');
+        if (form && !form.dataset.wired) {
+            form.dataset.wired = '1';
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const alertEl = document.getElementById('passwordAlert');
+                alertEl.classList.add('d-none');
+                const cur = document.getElementById('currentPassword').value;
+                const nw = document.getElementById('newPassword').value;
+                const cf = document.getElementById('confirmPassword').value;
+                const fail = (m) => { alertEl.className = 'alert alert-danger'; alertEl.textContent = m; alertEl.classList.remove('d-none'); };
+                if (nw !== cf) return fail('New passwords do not match');
+                if (nw.length < 8) return fail('Password must be at least 8 characters');
+                try {
+                    const r = await fetch('/auth/change-password', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ current_password: cur, new_password: nw })
+                    });
+                    const data = await r.json();
+                    if (r.ok && data.success) {
+                        alertEl.className = 'alert alert-success';
+                        alertEl.textContent = 'Password changed successfully!';
+                        alertEl.classList.remove('d-none');
+                        form.reset();
+                        setTimeout(() => {
+                            const m = bootstrap.Modal.getInstance(document.getElementById('changePasswordModal'));
+                            if (m) m.hide();
+                            alertEl.classList.add('d-none');
+                        }, 1500);
+                    } else {
+                        fail(data.detail || 'Failed to change password');
+                    }
+                } catch (err) { fail('Error: ' + err.message); }
+            });
+        }
+    })();
+
+    function logout() {
+        fetch('/auth/logout', { method: 'POST' }).then(() => window.location.href = '/login');
+    }
+</script>
