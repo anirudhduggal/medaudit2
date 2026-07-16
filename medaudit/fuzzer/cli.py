@@ -75,7 +75,23 @@ def cmd_run(args):
         config["target_port"] = args.port
     if args.max_requests:
         config["max_requests"] = args.max_requests
-    
+
+    # Safety guard: refuse to fuzz a non-loopback target without explicit
+    # authorization. Fuzzing sends malformed traffic that can disrupt live
+    # medical devices, so remote targets must be acknowledged deliberately.
+    from .safety import is_loopback_target
+    target_host = config.get("target_host", "localhost")
+    if not is_loopback_target(target_host) and not args.i_am_authorized:
+        print(
+            f"Error: target '{target_host}' is not localhost.\n"
+            f"Fuzzing sends malformed traffic that can crash or disrupt live "
+            f"medical devices.\n"
+            f"Re-run with --i-am-authorized to confirm you are authorized to "
+            f"test this host.",
+            file=sys.stderr,
+        )
+        return 2
+
     # Generate job ID
     job_id = f"cli-{datetime.now().strftime('%Y%m%d%H%M%S')}"
     
@@ -94,7 +110,11 @@ def cmd_run(args):
                   f"Interesting: {stats['interesting']}")
     
     # Run fuzzing
-    result = run_fuzzing_job(job_id, config, progress_callback=progress_callback)
+    result = run_fuzzing_job(
+        job_id, config,
+        progress_callback=progress_callback,
+        authorized=args.i_am_authorized,
+    )
     
     print("-" * 50)
     print(f"Status: {result['status']}")
@@ -438,6 +458,8 @@ Examples:
     run_parser.add_argument("--host", help="Override target host")
     run_parser.add_argument("--port", type=int, help="Override target port")
     run_parser.add_argument("--max-requests", type=int, help="Override max requests")
+    run_parser.add_argument("--i-am-authorized", action="store_true",
+                            help="Confirm authorization to fuzz a non-loopback (remote) target")
     run_parser.set_defaults(func=cmd_run)
     
     # Test command

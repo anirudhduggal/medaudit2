@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Patient {{ p.mrn }} — St. Elsewhere{% endblock %}
+{% block content %}
+<p><a href="/">&larr; Worklist</a></p>
+<div class="card">
+  {# VULN: name rendered unescaped -> stored XSS also fires on the detail view #}
+  <h2>{{ p.family|safe }}, {{ p.given|safe }} <span class="muted">&middot; MRN {{ p.mrn }}</span></h2>
+  <dl class="kv">
+    <dt>Date of Birth</dt><dd>{{ p.dob }}</dd>
+    <dt>Sex</dt><dd>{{ p.sex }}</dd>
+    <dt>SSN</dt><dd>{{ p.ssn or '—' }}</dd>
+    <dt>Last Order</dt><dd>{{ p.last_order|safe or '—' }}</dd>
+    <dt>Last Result</dt><dd>{{ p.last_result|safe or '—' }}</dd>
+    <dt>Message Type</dt><dd>{{ p.msg_type }}</dd>
+    <dt>Received</dt><dd class="muted">{{ p.received_at }}</dd>
+  </dl>
+</div>
+<div class="card">
+  <h2 style="font-size:.95rem;">Raw HL7 Message</h2>
+  <pre>{{ p.raw_hl7 }}</pre>
+</div>
+{% endblock %}

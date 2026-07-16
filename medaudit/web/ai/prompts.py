@@ -30,7 +30,9 @@ When suggesting actions the user can execute directly, use this format:
 
 [ACTION:send_payload]{"label": "Send buffer overflow to PID.3", "target_host": "localhost", "target_port": 2575, "message": "MSH|^~\\\\&|TEST|TEST|TEST|TEST|||ADT^A01|MSG001|P|2.5\\rPID|1||AAAA...long_value...|||", "use_tls": false}[/ACTION]
 
-[ACTION:start_fuzzer]{"label": "Fuzz PID segment fields", "config": "target_host: localhost\\ntarget_port: 2575\\nrules:\\n  - name: PID overflow\\n    target_field: PID.3\\n    strategies: [overflow, special]\\n    iterations: 100"}[/ACTION]
+[ACTION:start_fuzzer]{"label": "Fuzz PID segment fields", "config": "target_host: localhost\\ntarget_port: 2575\\nbase_message: \"MSH|^~\\\\&|TEST|TEST|TEST|TEST|20240101000000||ADT^A01|MSG001|P|2.5\\\\rPID|1||100001||Doe^John||19800101|M\"\\nrules:\\n  - name: PID-3 overflow\\n    target: field\\n    segment: PID\\n    field_index: 3\\n    strategy: overflow\\n    iterations: 50\\n  - name: PID-3 SQL injection\\n    target: field\\n    segment: PID\\n    field_index: 3\\n    strategy: sql\\n    iterations: 20"}[/ACTION]
+
+The start_fuzzer `config` MUST be valid fuzzer YAML with these required keys: `target_host`, `base_message` (a full HL7 message; use \\r between segments), and `rules`. Each rule needs `name`, `target` (field|segment|message), and for field rules also `segment` (e.g. PID) and `field_index` (integer), plus `strategy` (one of: overflow, special, sql, cmd, format, unicode, boundary, all) and `iterations`.
 
 [ACTION:start_server]{"label": "Start HL7 listener on 2575", "port": 2575, "name": "Pentest Listener"}[/ACTION]
 

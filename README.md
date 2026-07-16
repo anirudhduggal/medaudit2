@@ -97,12 +97,24 @@ The primary interface for security auditing. Start with `python -m medaudit web`
 - Start/stop with clean port release
 
 **AI Pentest Assistant (Sidebar)**
-- Persistent sidebar accessible across all tabs
-- AI-powered analysis with full project context awareness (server logs, client history, fuzzer findings, PCAP results)
+- Persistent, resizable sidebar accessible across all tabs
+- AI-powered analysis with full project context awareness (server logs, client history, fuzzer findings, PCAP results, and auto-pentest results)
 - Actionable suggestions with executable "Run this" buttons
 - Auto-analysis of events with batched processing
 - Token usage and cost tracking
 - Quick prompts: Status overview, Vulnerability analysis, Next steps
+
+**Auto-Pentest Agent (semi-autonomous)**
+- One-click engagement that runs a full HL7 methodology: recon → fuzzing → SQLi & DoS oracles → PHI/PII scan → **gated** stored-XSS exploit → report
+- Shows the agent's **reasoning before each stage**, with deliberate pacing and live fuzz progress
+- **Robust failure handling**: every check reports finding / clean / skipped (not-tested) / error, with a coverage summary — it never silently claims "clean" when it couldn't test
+- The offensive exploit step **pauses for explicit operator approval** (and non-loopback targets require confirmation — see the blast-radius guard below)
+- **Intensity levels** (Light / Standard / Thorough) and optional AI-narrated approach
+- Findings are written with accurate, agent-documented detail (description, reproduction steps, payload, impact, remediation)
+
+**Findings & Reporting**
+- **Findings tab** consolidating auto-pentest and fuzzer findings, ranked by severity and expandable to full detail
+- Export findings to **CSV**, or generate a **PDF pentest report** (executive summary + detailed findings)
 
 ### AI Provider Support
 
@@ -112,10 +124,11 @@ Configure AI providers globally in **Settings** (gear icon on dashboard). All co
 |----------|--------|-------|
 | **Anthropic Claude** | Claude Sonnet 4, Claude 3.5 Sonnet/Haiku, Claude 3 Opus | API key from [console.anthropic.com](https://console.anthropic.com/settings/keys) |
 | **OpenAI** | GPT-4o, GPT-4o Mini, GPT-4 Turbo, o1, o3-mini | API key from [platform.openai.com](https://platform.openai.com/api-keys) |
+| **OpenRouter** | Any model on OpenRouter (Claude, GPT, Gemini, Llama, Mistral, ...) | API key from [openrouter.ai/keys](https://openrouter.ai/keys) |
 | **Google Gemini** | Gemini 2.5 Flash/Pro, Gemini 2.0 Flash, Gemini 1.5 Pro/Flash | API key from [aistudio.google.com](https://aistudio.google.com/apikey) |
 | **Ollama (Local)** | Any locally installed model | [ollama.com](https://ollama.com) -- no API key needed |
 
-API keys are stored in-memory only (never persisted to disk) and can be wiped via the Disconnect button or by restarting the server.
+Provider keys you configure in **Settings** are persisted to the SQLite database and auto-loaded on startup, so you configure once and they survive restarts. They are **encrypted at rest** with a local data-encryption key (`medaudit/data/.secret_key`, created with `0600` permissions) that is independent of your admin password, so rotating the password never orphans saved keys. The **Disconnect** button wipes keys from both memory and disk. The database file on its own (e.g. in a backup or if committed to git) cannot decrypt the keys without the adjacent keyfile — but note this is *not* protection against an attacker who can read your whole data directory.
 
 ### Burp Suite Extension
 
@@ -167,6 +180,22 @@ python -m medaudit user --create --username john --password pass123 --admin
 # Run HL7 fuzzer
 python -m medaudit.fuzzer run -c config.yaml -o results.json
 ```
+
+---
+
+## Demo Environment
+
+A deliberately-vulnerable, containerized HL7 target — **"St. Elsewhere Hospital"** — is included under [`demo/hospital-sim/`](demo/hospital-sim/) for demos and training (think DVWA/Juice Shop, but for HL7). It runs an HL7/MLLP feed plus a clinical worklist viewer, seeded with **synthetic** patients, with planted weaknesses (cleartext PHI, SQL injection, crash-on-oversized-input, stored XSS) that map to what medaudit detects.
+
+```bash
+cd demo/hospital-sim
+docker compose up --build
+```
+
+- HL7/MLLP feed (attack this): `localhost:2575`
+- Clinical viewer (watch results here): `http://localhost:8081`
+
+Point medaudit's Client/Fuzzer/Auto-Pentest at `localhost:2575`. See [`demo/hospital-sim/DEMO.md`](demo/hospital-sim/DEMO.md) for a full guided walkthrough. **Synthetic data and authorized testing only** — never expose it to a network or feed it real PHI.
 
 ---
 
@@ -257,8 +286,10 @@ Medaudit implements the following security measures:
 - **Rate limiting**: 5 login attempts per 5 minutes, 15-minute lockout
 - **Session management**: httpOnly cookies, 24-hour expiry, server-side revocation on logout
 - **Security headers**: X-Content-Type-Options, X-Frame-Options, CSP, Permissions-Policy
+- **Fuzzer blast-radius guard**: fuzzing a non-loopback target requires explicit operator confirmation (`confirm_target` in the API / `--i-am-authorized` on the CLI); campaign volume is capped and remote targets get a minimum inter-message delay so a config can't accidentally flood a live device. Override the limits for authorized lab work with `MEDAUDIT_FUZZ_MAX_REQUESTS` and `MEDAUDIT_FUZZ_MIN_DELAY_MS`.
 - **Path traversal protection**: TLS certificate paths validated against allowlist
-- **API key safety**: Stored in-memory only, never written to disk or database
+- **API key safety**: Ad-hoc keys stay in memory; project-saved keys are encrypted at rest (Fernet/AES) with a `0600` sidecar key independent of the login password
+- **Admin password**: Set on first run (random if unspecified) and preserved across restarts; rotate explicitly with `--password` or `--generate-password`
 
 ---
 

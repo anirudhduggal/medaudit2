@@ -4,6 +4,7 @@ AI Provider Abstraction Layer
 Supports multiple AI backends:
 - Anthropic Claude (cloud)
 - OpenAI (cloud)
+- OpenRouter (cloud gateway to many models)
 - Google Gemini (cloud)
 - Ollama (local)
 
@@ -109,6 +110,12 @@ PROVIDER_INFO = {
         "icon": "bi-openai",
         "key_placeholder": "sk-proj-...",
         "docs_url": "https://platform.openai.com/api-keys",
+    },
+    "openrouter": {
+        "name": "OpenRouter",
+        "icon": "bi-diagram-3",
+        "key_placeholder": "sk-or-v1-...",
+        "docs_url": "https://openrouter.ai/keys",
     },
     "gemini": {
         "name": "Google Gemini",
@@ -421,6 +428,58 @@ class OpenAIProvider(AIProvider):
         return _extract_insights_from_content(content)
 
 
+class OpenRouterProvider(OpenAIProvider):
+    """
+    OpenRouter provider.
+
+    OpenRouter is an OpenAI-API-compatible gateway that fronts hundreds of
+    models from many vendors behind a single key. We reuse OpenAIProvider's
+    chat()/validate_key() and only override client construction (different
+    base URL) and model listing (OpenRouter ids contain a vendor prefix,
+    e.g. "anthropic/claude-sonnet-4", so the gpt-* filter does not apply).
+    """
+
+    BASE_URL = "https://openrouter.ai/api/v1"
+
+    def _get_client(self):
+        if self._client is None:
+            try:
+                import openai
+                self._client = openai.OpenAI(
+                    api_key=self.api_key,
+                    base_url=self.BASE_URL,
+                    # Optional attribution headers used by OpenRouter dashboards.
+                    default_headers={
+                        "HTTP-Referer": "https://github.com/anirudhduggal/medaudit2",
+                        "X-Title": "medaudit2",
+                    },
+                )
+            except ImportError:
+                raise RuntimeError("openai package not installed. Run: pip install openai")
+        return self._client
+
+    def provider_name(self) -> str:
+        return "openrouter"
+
+    def list_models(self) -> List[Dict[str, str]]:
+        """List every model OpenRouter exposes (sorted by id)."""
+        try:
+            client = self._get_client()
+            response = client.models.list()
+            models = []
+            for model in response.data:
+                model_id = model.id
+                name = getattr(model, "name", None) or model_id
+                models.append({"id": model_id, "name": name})
+            models.sort(key=lambda m: m["id"])
+            return models if models else [
+                {"id": "openrouter/auto", "name": "Auto (best available)"},
+            ]
+        except Exception as e:
+            logger.warning(f"Failed to fetch OpenRouter models: {e}")
+            return [{"id": "openrouter/auto", "name": "Auto (best available)"}]
+
+
 class GeminiProvider(AIProvider):
     """Google Gemini provider."""
     
@@ -703,6 +762,11 @@ def get_provider(
             raise ValueError("API key is required for OpenAI")
         return OpenAIProvider(api_key=api_key)
 
+    elif provider_type == "openrouter":
+        if not api_key:
+            raise ValueError("API key is required for OpenRouter")
+        return OpenRouterProvider(api_key=api_key)
+
     elif provider_type == "gemini":
         if not api_key:
             raise ValueError("API key is required for Google Gemini")
@@ -713,4 +777,4 @@ def get_provider(
         return OllamaProvider(base_url=url)
 
     else:
-        raise ValueError(f"Unknown provider: {provider_type}. Supported: anthropic, openai, gemini, ollama")
+        raise ValueError(f"Unknown provider: {provider_type}. Supported: anthropic, openai, openrouter, gemini, ollama")

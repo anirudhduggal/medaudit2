@@ -32,16 +32,8 @@
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-dark">
-        <div class="container">
-            <a class="navbar-brand" href="/dashboard">
-                <span class="brand-icon"><i class="bi bi-shield-check"></i></span> Medaudit 2.0
-            </a>
-            <div>
-                <a href="/dashboard" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-left me-1"></i>Dashboard</a>
-            </div>
-        </div>
-    </nav>
+    {% set show_back = true %}
+    {% include "_topbar.html" %}
 
     <div class="settings-header">
         <div class="container">
@@ -146,6 +138,61 @@
                     <div id="models-openai" class="mt-2" style="display:none;">
                         <small class="text-muted">Available models:</small>
                         <div id="model-badges-openai"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- OpenRouter -->
+            <div class="provider-card card" id="card-openrouter">
+                <div class="card-header">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-diagram-3 provider-icon text-info"></i>
+                        <div>
+                            <div class="provider-name">OpenRouter</div>
+                            <a href="https://openrouter.ai/keys" target="_blank" class="docs-link text-muted">Get API key <i class="bi bi-box-arrow-up-right"></i></a>
+                        </div>
+                    </div>
+                    <span class="provider-status status-not-configured" id="status-openrouter">
+                        <i class="bi bi-circle"></i> Not configured
+                    </span>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning py-2 px-3 mb-3 small" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                        OpenRouter forwards your prompts &mdash; including captured HL7 traffic and
+                        detected PII/PHI in the project context &mdash; to third-party model providers,
+                        some of which may log or train on request data. Only use OpenRouter for engagements
+                        where sending that context off-site is authorized, and set data/logging controls
+                        on your OpenRouter account.
+                    </div>
+                    <div class="row align-items-end">
+                        <div class="col-md-6 mb-2">
+                            <label class="form-label small fw-bold">API Key</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="key-openrouter" placeholder="sk-or-v1-...">
+                                <button class="btn btn-outline-primary" onclick="validateProvider('openrouter')" id="validate-openrouter">
+                                    <i class="bi bi-check2-circle"></i> Validate
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <label class="form-label small fw-bold">Default Model</label>
+                            <select class="form-select" id="model-openrouter" disabled>
+                                <option>Validate key first</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 mb-2 d-flex gap-1">
+                            <button class="btn btn-primary flex-grow-1" onclick="saveProvider('openrouter')" id="save-openrouter" disabled>
+                                <i class="bi bi-check-lg"></i> Save
+                            </button>
+                            <button class="btn btn-outline-danger" onclick="removeProvider('openrouter')" id="remove-openrouter" style="display:none;" title="Remove">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="models-openrouter" class="mt-2" style="display:none;">
+                        <small class="text-muted">Available models:</small>
+                        <div id="model-badges-openrouter"></div>
                     </div>
                 </div>
             </div>
@@ -269,6 +316,17 @@
             } catch (e) { console.error('Failed to load providers:', e); }
         }
 
+        // Render model badges, capping the count so gateways that expose
+        // hundreds of models (e.g. OpenRouter) don't flood the page.
+        function renderModelBadges(models) {
+            const MAX = 40;
+            const shown = models.slice(0, MAX)
+                .map(m => `<span class="model-badge">${m.name}</span>`).join('');
+            const extra = models.length > MAX
+                ? `<span class="model-badge">+${models.length - MAX} more</span>` : '';
+            return shown + extra;
+        }
+
         function markConfigured(provider, models, defaultModel, isActive) {
             const status = document.getElementById(`status-${provider}`);
             const activeLabel = isActive ? ' <span class="active-indicator"></span>Active' : '';
@@ -289,7 +347,7 @@
             
             // Show model badges
             const badgesDiv = document.getElementById(`model-badges-${provider}`);
-            badgesDiv.innerHTML = models.map(m => `<span class="model-badge">${m.name}</span>`).join('');
+            badgesDiv.innerHTML = renderModelBadges(models);
             document.getElementById(`models-${provider}`).style.display = 'block';
             
             // Show remove button, enable save
@@ -342,7 +400,7 @@
                     
                     // Show model badges
                     const badgesDiv = document.getElementById(`model-badges-${provider}`);
-                    badgesDiv.innerHTML = data.models.map(m => `<span class="model-badge">${m.name}</span>`).join('');
+                    badgesDiv.innerHTML = renderModelBadges(data.models);
                     document.getElementById(`models-${provider}`).style.display = 'block';
                     
                     btn.innerHTML = '<i class="bi bi-check-lg text-success"></i> Valid';

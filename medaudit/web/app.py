@@ -218,8 +218,31 @@ def start_web_server(
         )
     finally:
         db.close()
-    
-    # Display startup message with full password visible for copy
+
+    # Restore any saved AI provider credentials so they survive restarts
+    # (best-effort; never blocks startup).
+    try:
+        from .ai_api import load_persisted_providers
+        db2 = db_manager.get_session()
+        try:
+            load_persisted_providers(db2)
+        finally:
+            db2.close()
+    except Exception as e:
+        print(f"[medaudit] Warning: could not preload saved AI providers: {e}")
+
+    # Display startup message. `password` is None when the existing password
+    # was preserved (plain restart) -- don't print a stale/None value.
+    password_line = (
+        f"|    Password: {password:<44}|"
+        if password is not None
+        else "|    Password: (unchanged - use your existing password)      |"
+    )
+    reset_hint = (
+        ""
+        if password is not None
+        else "|  Forgot it?  Restart with --generate-password to rotate.  |\n"
+    )
     print(f"""
 +-----------------------------------------------------------+
 |             MEDAUDIT 2.0 - Security Audit Platform        |
@@ -229,8 +252,8 @@ def start_web_server(
 |                                                           |
 |  Admin Login:                                             |
 |    Username: admin                                        |
-|    Password: {password:<44}|
-+-----------------------------------------------------------+
+{password_line}
+{reset_hint}+-----------------------------------------------------------+
 """)
     
     uvicorn.run(app, host=host, port=port)

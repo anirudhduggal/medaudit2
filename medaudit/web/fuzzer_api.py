@@ -112,6 +112,8 @@ class CreateFuzzingJobRequest(BaseModel):
     name: str
     config_content: str
     config_format: str = "yaml"
+    # Operator confirmation required to fuzz a non-loopback (remote) target.
+    confirm_target: bool = False
 
 
 @router.post("/projects/{project_id}/jobs")
@@ -151,7 +153,22 @@ async def create_fuzzing_job(
     is_valid, errors = validate_config(config)
     if not is_valid:
         raise HTTPException(status_code=400, detail=f"Invalid config: {'; '.join(errors)}")
-    
+
+    # Safety guard: fuzzing a non-loopback target requires explicit operator
+    # confirmation, because malformed traffic can disrupt live medical devices.
+    from medaudit.fuzzer.safety import is_loopback_target
+    target_host = config.get("target_host", "localhost")
+    if not is_loopback_target(target_host) and not request.confirm_target:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Target '{target_host}' is not localhost. Fuzzing sends malformed "
+                f"traffic that can crash or disrupt live medical devices. Re-submit "
+                f"with confirm_target=true to acknowledge you are authorized to test "
+                f"this host."
+            ),
+        )
+
     # Create job record
     job = FuzzingJob(
         project_id=project_id,
@@ -175,7 +192,7 @@ async def create_fuzzing_job(
     thread = threading.Thread(
         target=run_fuzzing_job,
         args=(job.id, config, db_manager.SessionLocal),
-        kwargs={"project_id": project_id}
+        kwargs={"project_id": project_id, "authorized": request.confirm_target}
     )
     thread.daemon = True
     thread.start()
