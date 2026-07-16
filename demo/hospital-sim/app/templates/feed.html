@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Message Feed — St. Elsewhere{% endblock %}
+{% block content %}
+<h2>Inbound HL7 Message Feed <span class="muted">(last 100)</span></h2>
+<table>
+  <thead>
+    <tr><th>Received</th><th>Source</th><th>Type</th><th>ACK</th><th>Note</th></tr>
+  </thead>
+  <tbody>
+    {% for m in messages %}
+    <tr>
+      <td class="muted">{{ m.received_at[:19] if m.received_at else '' }}</td>
+      <td>{{ m.source }}</td>
+      <td><span class="pill">{{ m.msg_type or '—' }}</span></td>
+      <td>{% if m.ack_code == 'AA' %}<span class="pill">AA</span>{% else %}<span class="pill" style="background:#fdecea;color:#c0392b;">{{ m.ack_code }}</span>{% endif %}</td>
+      <td class="muted">{{ m.note }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

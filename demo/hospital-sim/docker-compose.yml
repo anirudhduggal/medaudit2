@@ -1,0 +1,15 @@
+# St. Elsewhere Hospital -- vulnerable HL7 demo target.
+#
+# Ports are bound to 127.0.0.1 ONLY so this intentionally-insecure target is
+# never exposed to your network. Point medaudit2 at localhost:2575 (feed) and
+# open http://localhost:8081 (clinical viewer -- 8081 avoids clashing with the
+# medaudit2 web UI's default 8080).
+
+services:
+  hospital-sim:
+    build: .
+    container_name: stelsewhere-hl7
+    ports:
+      - "127.0.0.1:2575:2575"   # HL7/MLLP feed (plaintext, no TLS)
+      - "127.0.0.1:8081:8080"   # clinical worklist viewer (host 8081 -> container 8080)
+    restart: unless-stopped
