@@ -23,7 +23,7 @@ def is_hl7_message(payload):
         # HL7 messages start with MSH|
         if text.startswith('MSH|'):
             return True, text.split('\n')[0]  # Return first line
-    except:
+    except Exception:
         pass
     return False, None
 

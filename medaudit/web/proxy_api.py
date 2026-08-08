@@ -220,7 +220,7 @@ async def get_proxy_status(
             proc = psutil.Process(process.pid)
             cpu_percent = proc.cpu_percent(interval=0.1)
             memory_mb = proc.memory_info().rss / 1024 / 1024
-        except:
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, Exception):
             cpu_percent = 0
             memory_mb = 0
         

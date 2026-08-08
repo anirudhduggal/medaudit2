@@ -193,7 +193,7 @@ class MaliciousHL7Server:
         if self.server_socket:
             try:
                 self.server_socket.close()
-            except:
+            except Exception:
                 pass
         if self.server_thread:
             self.server_thread.join(timeout=5)
@@ -310,7 +310,7 @@ class MaliciousHL7Server:
             
             try:
                 client_socket.close()
-            except:
+            except Exception:
                 pass
     
     def _execute_attack(
@@ -403,7 +403,7 @@ class MaliciousHL7Server:
                     if len(fields) > 9:
                         return fields[9]  # MSH-10 is message control ID
             return "UNKNOWN"
-        except:
+        except Exception:
             return "UNKNOWN"
     
     def _build_ack(self, control_id: str, ack_code: str = "AA", error_msg: str = "") -> bytes:
@@ -484,7 +484,7 @@ class MaliciousHL7Server:
                 sock.sendall(ack)
                 if delay > 0:
                     time.sleep(delay)
-            except:
+            except Exception:
                 break
         
         return True
@@ -568,7 +568,7 @@ class MaliciousHL7Server:
             try:
                 sock.send(bytes([byte]))
                 time.sleep(delay)
-            except:
+            except Exception:
                 return False
         
         return True
@@ -665,7 +665,7 @@ class MaliciousHL7Server:
                 nak = self._build_ack(f"{control_id}_{i}", "AE", error)
                 sock.sendall(nak)
                 time.sleep(self.config.flood_delay_ms / 1000)
-            except:
+            except Exception:
                 break
         
         return True

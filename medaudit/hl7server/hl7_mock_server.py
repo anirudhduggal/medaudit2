@@ -270,7 +270,7 @@ class HL7Server:
                 client_socket.close()
                 self.logger.info(f"Client {client_id} disconnected")
                 self.message_logger.log_connection(client_id, client_address, "DISCONNECTED")
-            except:
+            except Exception:
                 pass
 
     @staticmethod
@@ -381,5 +381,5 @@ class HL7Server:
                 "message_id": msh_fields[9] if len(msh_fields) > 9 else "UNKNOWN",
                 "message_type": msh_fields[8] if len(msh_fields) > 8 else "UNKNOWN"
             }
-        except:
+        except Exception:
             return {"message_id": "UNKNOWN", "message_type": "UNKNOWN"}

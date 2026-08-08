@@ -89,7 +89,7 @@ class HL7Client:
                 self.socket.close()
                 if self.verbose:
                     print("✓ Disconnected from server")
-            except:
+            except Exception:
                 pass
 
     def send_message(self, hl7_message: str) -> Optional[str]:

@@ -222,7 +222,7 @@ def send_hl7_message(
         if sock:
             try:
                 sock.close()
-            except:
+            except Exception:
                 pass
 
 

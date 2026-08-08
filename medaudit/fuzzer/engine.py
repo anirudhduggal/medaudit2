@@ -644,7 +644,7 @@ def run_fuzzing_job(
                 if job:
                     job.status = "error"
                     db.commit()
-            except:
+            except Exception:
                 pass
         
         return {
@@ -658,7 +658,7 @@ def run_fuzzing_job(
         if db:
             try:
                 db.close()
-            except:
+            except Exception:
                 pass
 
 
