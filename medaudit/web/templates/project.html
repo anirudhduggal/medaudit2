@@ -266,8 +266,18 @@
                                 <p class="small text-muted mb-2">Starts an HTTP server that receives messages and forwards them as MLLP to the target HL7 server.</p>
                                 <div class="row mb-2">
                                     <div class="col-6">
+                                        <label class="small">HTTP Server Bind IP</label>
+                                        <input type="text" class="form-control form-control-sm" id="proxyHost" value="0.0.0.0">
+                                    </div>
+                                    <div class="col-6">
                                         <label class="small">HTTP Server Port</label>
                                         <input type="number" class="form-control form-control-sm" id="proxyPort" value="3000">
+                                    </div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-6">
+                                        <label class="small">Target HL7 Host</label>
+                                        <input type="text" class="form-control form-control-sm" id="proxyTargetHost" value="localhost">
                                     </div>
                                     <div class="col-6">
                                         <label class="small">Target HL7 Port</label>
@@ -282,10 +292,10 @@
                                 <div id="proxyStatus" class="small mt-2 text-muted" style="display: none;">
                                     <div class="d-flex align-items-center gap-2">
                                         <div class="status-dot status-running"></div>
-                                        <span>Listening on <strong>http://localhost:<span id="proxyPortDisplay">3000</span></strong></span>
+                                        <span>Listening on <strong>http://<span id="proxyHostDisplay">0.0.0.0</span>:<span id="proxyPortDisplay">3000</span></strong></span>
                                     </div>
                                     <div class="mt-1">
-                                        Send HTTP POST to localhost:<span id="proxyPortConfig">3000</span> → converts to MLLP
+                                        Forwarding to <strong><span id="proxyTargetHostDisplay">localhost</span>:<span id="proxyTargetPortDisplay">2575</span></strong> (converts to MLLP)
                                     </div>
                                 </div>
                             </div>
@@ -972,12 +982,16 @@
                     btn.className = 'btn btn-sm btn-danger flex-grow-1';
                     btn.innerHTML = '<i class="bi bi-stop-fill me-1"></i>Stop Server';
                     
+                    const proxyHostDisplayEl = document.getElementById('proxyHostDisplay');
                     const proxyPortDisplayEl = document.getElementById('proxyPortDisplay');
-                    const proxyPortConfigEl = document.getElementById('proxyPortConfig');
+                    const proxyTargetHostDisplayEl = document.getElementById('proxyTargetHostDisplay');
+                    const proxyTargetPortDisplayEl = document.getElementById('proxyTargetPortDisplay');
                     const proxyStatusEl = document.getElementById('proxyStatus');
                     
-                    if (proxyPortDisplayEl) proxyPortDisplayEl.textContent = data.proxy.port;
-                    if (proxyPortConfigEl) proxyPortConfigEl.textContent = data.proxy.port;
+                    if (proxyHostDisplayEl) proxyHostDisplayEl.textContent = data.proxy.host || '0.0.0.0';
+                    if (proxyPortDisplayEl) proxyPortDisplayEl.textContent = data.proxy.port || proxyPort;
+                    if (proxyTargetHostDisplayEl) proxyTargetHostDisplayEl.textContent = data.proxy.hl7_host || 'localhost';
+                    if (proxyTargetPortDisplayEl) proxyTargetPortDisplayEl.textContent = data.proxy.hl7_port || 2575;
                     if (proxyStatusEl) proxyStatusEl.style.display = 'block';
                 }
             } catch (error) {
@@ -987,7 +1001,9 @@
 
         async function toggleProxy() {
             const btn = document.getElementById('proxyBtn');
+            const proxyHost = document.getElementById('proxyHost').value.trim() || '0.0.0.0';
             const proxyPort = parseInt(document.getElementById('proxyPort').value);
+            const targetHost = document.getElementById('proxyTargetHost').value.trim() || 'localhost';
             const targetPort = parseInt(document.getElementById('proxyTargetPort').value);
             
             if (proxyProcess) {
@@ -1027,8 +1043,9 @@
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
+                            proxy_host: proxyHost,
                             proxy_port: proxyPort,
-                            hl7_host: 'localhost',
+                            hl7_host: targetHost,
                             hl7_port: targetPort
                         })
                     });
@@ -1041,21 +1058,25 @@
                     const data = await response.json();
                     
                     if (data.success) {
+                        const proxyHostDisplayEl = document.getElementById('proxyHostDisplay');
                         const proxyPortDisplayEl = document.getElementById('proxyPortDisplay');
-                        const proxyPortConfigEl = document.getElementById('proxyPortConfig');
+                        const proxyTargetHostDisplayEl = document.getElementById('proxyTargetHostDisplay');
+                        const proxyTargetPortDisplayEl = document.getElementById('proxyTargetPortDisplay');
                         const proxyStatusEl = document.getElementById('proxyStatus');
                         
+                        if (proxyHostDisplayEl) proxyHostDisplayEl.textContent = proxyHost;
                         if (proxyPortDisplayEl) proxyPortDisplayEl.textContent = proxyPort;
-                        if (proxyPortConfigEl) proxyPortConfigEl.textContent = proxyPort;
+                        if (proxyTargetHostDisplayEl) proxyTargetHostDisplayEl.textContent = targetHost;
+                        if (proxyTargetPortDisplayEl) proxyTargetPortDisplayEl.textContent = targetPort;
                         if (proxyStatusEl) proxyStatusEl.style.display = 'block';
                         
-                        proxyProcess = { port: proxyPort, targetPort: targetPort, pid: data.proxy?.pid };
+                        proxyProcess = { host: proxyHost, port: proxyPort, targetHost: targetHost, targetPort: targetPort, pid: data.proxy?.pid };
                         
                         btn.className = 'btn btn-sm btn-danger flex-grow-1';
                         btn.innerHTML = '<i class="bi bi-stop-fill me-1"></i>Stop Server';
                         
                         addLogEntry(document.getElementById('clientLog'), 'info', 
-                            `HTTP→MLLP converter listening on port ${proxyPort}, forwarding to HL7 port ${targetPort}`,
+                            `HTTP→MLLP converter listening on ${proxyHost}:${proxyPort}, forwarding to ${targetHost}:${targetPort}`,
                             ''
                         );
                     } else {

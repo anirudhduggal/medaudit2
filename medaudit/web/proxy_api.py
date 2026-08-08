@@ -24,6 +24,7 @@ active_proxies = {}
 
 
 class ProxyStartRequest(BaseModel):
+    proxy_host: str = "0.0.0.0"
     proxy_port: int
     hl7_host: str = "localhost"
     hl7_port: int = 2575
@@ -41,27 +42,30 @@ async def start_proxy(
 ):
     """Start an HTTP→HL7 proxy instance."""
     try:
+        proxy_host = request.proxy_host or "0.0.0.0"
         proxy_port = request.proxy_port
         hl7_host = request.hl7_host
         hl7_port = request.hl7_port
         
-        logger.info(f"Starting proxy on port {proxy_port} -> {hl7_host}:{hl7_port}")
+        logger.info(f"Starting proxy on {proxy_host}:{proxy_port} -> {hl7_host}:{hl7_port}")
         logger.info(f"Current active_proxies: {list(active_proxies.keys())}")
         
         # First, check if port is actually in use by checking socket
         import socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(1)
-        connect_result = sock.connect_ex(('127.0.0.1', proxy_port))
+        target_check_ip = '127.0.0.1' if proxy_host in ('0.0.0.0', '::', '') else proxy_host
+        connect_result = sock.connect_ex((target_check_ip, proxy_port))
         port_in_use = connect_result == 0
         sock.close()
         
-        logger.info(f"Port {proxy_port} check: connect_result={connect_result}, port_in_use={port_in_use}")
+        logger.info(f"Port {proxy_port} check on {target_check_ip}: connect_result={connect_result}, port_in_use={port_in_use}")
         
         # If port is in use, check if it's our tracked process
         if port_in_use:
             if proxy_port in active_proxies:
-                proc = active_proxies[proxy_port]
+                info = active_proxies[proxy_port]
+                proc = info["process"] if isinstance(info, dict) else info
                 poll_result = proc.poll()
                 logger.info(f"Tracked process poll result: {poll_result}")
                 if poll_result is None:
@@ -88,7 +92,7 @@ async def start_proxy(
         process = subprocess.Popen(
             [
                 sys.executable, "-m", "medaudit.proxy.proxy_server",
-                "--host", "0.0.0.0",
+                "--host", proxy_host,
                 "--port", str(proxy_port),
                 "--hl7-host", hl7_host,
                 "--hl7-port", str(hl7_port)
@@ -98,14 +102,20 @@ async def start_proxy(
             text=True
         )
         
-        # Store process
-        active_proxies[proxy_port] = process
+        # Store process & configuration metadata
+        active_proxies[proxy_port] = {
+            "process": process,
+            "proxy_host": proxy_host,
+            "hl7_host": hl7_host,
+            "hl7_port": hl7_port
+        }
         
-        logger.info(f"Proxy started successfully on port {proxy_port}, PID: {process.pid}")
+        logger.info(f"Proxy started successfully on {proxy_host}:{proxy_port}, PID: {process.pid}")
         
         return {
             "success": True,
             "proxy": {
+                "host": proxy_host,
                 "port": proxy_port,
                 "hl7_host": hl7_host,
                 "hl7_port": hl7_port,
@@ -137,7 +147,8 @@ async def stop_proxy(
                 "detail": f"No proxy running on port {proxy_port}"
             }
         
-        process = active_proxies[proxy_port]
+        info = active_proxies[proxy_port]
+        process = info["process"] if isinstance(info, dict) else info
         
         # Try graceful termination first
         process.terminate()
@@ -176,7 +187,17 @@ async def get_proxy_status(
                 }
             }
         
-        process = active_proxies[proxy_port]
+        info = active_proxies[proxy_port]
+        if isinstance(info, dict):
+            process = info["process"]
+            proxy_host = info.get("proxy_host", "0.0.0.0")
+            hl7_host = info.get("hl7_host", "localhost")
+            hl7_port = info.get("hl7_port", 2575)
+        else:
+            process = info
+            proxy_host = "0.0.0.0"
+            hl7_host = "localhost"
+            hl7_port = 2575
         
         # Check if process is still alive
         if process.poll() is not None:
@@ -185,7 +206,10 @@ async def get_proxy_status(
             return {
                 "success": True,
                 "proxy": {
+                    "host": proxy_host,
                     "port": proxy_port,
+                    "hl7_host": hl7_host,
+                    "hl7_port": hl7_port,
                     "status": "stopped",
                     "exit_code": process.returncode
                 }
@@ -203,7 +227,10 @@ async def get_proxy_status(
         return {
             "success": True,
             "proxy": {
+                "host": proxy_host,
                 "port": proxy_port,
+                "hl7_host": hl7_host,
+                "hl7_port": hl7_port,
                 "pid": process.pid,
                 "status": "running",
                 "cpu_percent": cpu_percent,
@@ -226,12 +253,19 @@ async def list_proxies(
         
         # Clean up dead processes
         dead_ports = []
-        for port, process in active_proxies.items():
+        for port, info in active_proxies.items():
+            process = info["process"] if isinstance(info, dict) else info
             if process.poll() is not None:
                 dead_ports.append(port)
             else:
+                proxy_host = info.get("proxy_host", "0.0.0.0") if isinstance(info, dict) else "0.0.0.0"
+                hl7_host = info.get("hl7_host", "localhost") if isinstance(info, dict) else "localhost"
+                hl7_port = info.get("hl7_port", 2575) if isinstance(info, dict) else 2575
                 proxies.append({
+                    "host": proxy_host,
                     "port": port,
+                    "hl7_host": hl7_host,
+                    "hl7_port": hl7_port,
                     "pid": process.pid,
                     "status": "running"
                 })

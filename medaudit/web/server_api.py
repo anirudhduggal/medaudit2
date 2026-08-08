@@ -7,6 +7,7 @@ import os
 import socket
 import ssl
 import threading
+import time
 import json
 from datetime import datetime
 from typing import Optional, List, Dict, Any
@@ -449,6 +450,11 @@ def run_server(server_id: str, config: dict, db_session_factory):
         
         server.start()
         
+        # If server is running (e.g. non-blocking start like MaliciousHL7Server),
+        # keep the run_server background thread alive until server stops.
+        while getattr(server, 'running', False):
+            time.sleep(0.2)
+        
     except Exception as e:
         _active_servers[server_id] = {
             "status": "error",
@@ -588,6 +594,25 @@ async def list_servers(
                 # Get message log for UI display
                 if hasattr(server_obj, 'message_log') and isinstance(server_obj.message_log, list):
                     server_dict["live_message_log"] = server_obj.message_log[-50:]
+                elif hasattr(server_obj, 'get_logs') and callable(server_obj.get_logs):
+                    try:
+                        raw_logs = server_obj.get_logs()
+                        formatted_logs = []
+                        for log in raw_logs[-50:]:
+                            formatted_logs.append({
+                                "event_type": "message_received" if log.get("request_size", 0) > 0 else "connection",
+                                "timestamp": log.get("timestamp"),
+                                "data": {
+                                    "client": log.get("client"),
+                                    "action": f"attack_mode: {log.get('attack_mode')}",
+                                    "message_preview": log.get("request_preview"),
+                                    "response_sent": log.get("response_sent"),
+                                    "error": log.get("error")
+                                }
+                            })
+                        server_dict["live_message_log"] = formatted_logs
+                    except Exception:
+                        server_dict["live_message_log"] = []
         else:
             # Server not in memory but database says running - sync the status
             if s.status == "running":
@@ -648,8 +673,27 @@ async def get_server(
             else:
                 result["live_messages"] = 0
             
-            if hasattr(server_obj, 'message_log'):
+            if hasattr(server_obj, 'message_log') and isinstance(server_obj.message_log, list):
                 result["message_log"] = server_obj.message_log[-100:]  # Last 100 events
+            elif hasattr(server_obj, 'get_logs') and callable(server_obj.get_logs):
+                try:
+                    raw_logs = server_obj.get_logs()
+                    formatted_logs = []
+                    for log in raw_logs[-100:]:
+                        formatted_logs.append({
+                            "event_type": "message_received" if log.get("request_size", 0) > 0 else "connection",
+                            "timestamp": log.get("timestamp"),
+                            "data": {
+                                "client": log.get("client"),
+                                "action": f"attack_mode: {log.get('attack_mode')}",
+                                "message_preview": log.get("request_preview"),
+                                "response_sent": log.get("response_sent"),
+                                "error": log.get("error")
+                            }
+                        })
+                    result["message_log"] = formatted_logs
+                except Exception:
+                    result["message_log"] = []
             else:
                 result["message_log"] = []
     else:

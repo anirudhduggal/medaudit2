@@ -43,6 +43,8 @@ def test_round_trip(isolated_keyfile):
 def test_keyfile_created_with_0600(isolated_keyfile):
     crypto.encrypt("anything")           # forces key creation
     assert isolated_keyfile.exists()
+    if os.name == "nt":
+        return  # Windows st_mode permissions do not support POSIX 0600 bitmasks
     mode = stat.S_IMODE(os.stat(isolated_keyfile).st_mode)
     assert mode == 0o600, f"expected 0600, got {oct(mode)}"
 

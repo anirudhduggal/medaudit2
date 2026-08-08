@@ -33,6 +33,8 @@ def main():
     # Proxy command
     proxy_parser = subparsers.add_parser('proxy', help='Start HTTP-to-HL7 proxy server')
     proxy_config = config.get_proxy_config()
+    proxy_parser.add_argument('--host', default=proxy_config.get('http_host', '0.0.0.0'),
+                             help=f'HTTP host/IP to bind on (default: {proxy_config.get("http_host", "0.0.0.0")})')
     proxy_parser.add_argument('--port', type=int, default=proxy_config.get('http_port', 8080),
                              help=f'HTTP port to listen on (default: {proxy_config.get("http_port", 8080)})')
     proxy_parser.add_argument('--hl7-host', default=proxy_config.get('hl7_host', 'localhost'),
@@ -72,7 +74,7 @@ def main():
     if args.command == 'analyze':
         analyze_pcap(args.pcap_file)
     elif args.command == 'proxy':
-        start_proxy(http_port=args.port, hl7_host=args.hl7_host, hl7_port=args.hl7_port)
+        start_proxy(http_host=args.host, http_port=args.port, hl7_host=args.hl7_host, hl7_port=args.hl7_port)
     elif args.command == 'web':
         from .web import start_web_server
         start_web_server(
