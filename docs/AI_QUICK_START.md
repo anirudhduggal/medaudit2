@@ -12,7 +12,7 @@
 2. **Configure in Medaudit**
    - Start server: `python3 -m medaudit web --port 8080`
    - Open http://localhost:8080
-   - Login with: `admin` / `admin123`
+   - Login with: `admin` and your password configured via `--password` or output from `--generate-password`
    - Create or open a project
    - Click "Analyze with AI" tab
    - Select provider: **OpenAI**

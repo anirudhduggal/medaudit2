@@ -105,7 +105,15 @@ How can I test for buffer overflow vulnerabilities?
 | **Max Tokens** | Maximum response length | 2000 |
 
 ### MCP Configuration (Advanced)
-Medaudit includes a built-in Model Context Protocol (MCP) server that exposes core functionalities (mock server, fuzzer, PCAP analyzer, and client messaging) to external LLMs and AI agents like Claude Desktop and Cursor.
+Medaudit includes a built-in Model Context Protocol (MCP) server that exposes core capabilities (mock server control, fuzzer jobs, PCAP analyzer, real-time HL7 messaging, project context retrieval, and auto-pentest runs) to external LLMs and AI agents like Claude Desktop and Cursor.
+
+Exposed MCP Tools:
+- `start_mock_server` / `stop_mock_server`: Control HL7 mock servers.
+- `start_fuzzer`: Run automated HL7 protocol mutation jobs.
+- `send_hl7_payload`: Send HL7 payloads and log activity to project context.
+- `get_project_context`: Retrieve complete project state, PCAP findings, and server logs.
+- `run_auto_pentest`: Launch semi-autonomous pentest engagements.
+- `analyze_pcap`: Detailed PCAP traffic, encryption, and PII analysis.
 
 To run the MCP server, use the CLI command:
 ```bash
@@ -130,7 +138,7 @@ Example configuration for Claude Desktop (`claude_desktop_config.json`):
 ## Security & Privacy
 
 ### ✅ Privacy Features
-- **API keys stored in memory only** - Never saved to database
+- **Encrypted at rest** - API keys are encrypted using local keyfile protection (`medaudit/data/.secret_key` with 0600 permissions)
 - **No telemetry** - Your data stays between you and your chosen provider
 - **Context control** - You control what data is shared with AI
 - **Local model support** - Use Ollama/LM Studio for complete privacy

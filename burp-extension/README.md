@@ -1,6 +1,8 @@
 # Medaudit2 Burp Suite Extension
 
-A Burp Suite extension that forwards HTTP requests to the Medaudit HTTP-to-MLLP proxy for HL7 medical device security testing.
+A Java extension for Burp Suite that forwards HTTP requests to the Medaudit HTTP-to-MLLP proxy for HL7 medical device security testing.
+
+Source code is fully included in this directory (`burp-extension/`) so you can inspect, modify, and build the extension on your own.
 
 ## How It Works
 
@@ -10,20 +12,30 @@ A Burp Suite extension that forwards HTTP requests to the Medaudit HTTP-to-MLLP 
 4. The proxy converts it to HL7/MLLP and sends it to the target medical device
 5. The HL7 response is displayed in the **Medaudit2 > Response Log** tab
 
-## Setup
+## Building from Source
 
 ### Prerequisites
+- Java JDK 17 or higher
+- Gradle (or standard IDE Java build tools)
 - Burp Suite Professional or Community Edition
-- Medaudit 2.0 running with the HTTP-to-MLLP proxy enabled
 
-### Install the Extension
-1. Download `medaudit2-burp-extension-1.0.0.jar` from the [Releases](https://github.com/anirudhduggal/medaudit2/releases) page
-2. In Burp Suite: **Extensions > Installed > Add**
-3. Select **Extension type: Java**
-4. Select the downloaded JAR file
-5. Click **Next** -- the extension loads
+### Build Steps
 
-### Configure
+```bash
+cd burp-extension
+gradle jar
+# Output artifact: build/libs/medaudit2-burp-extension-1.0.0.jar
+```
+
+## Installing in Burp Suite
+
+1. In Burp Suite: **Extensions > Installed > Add**
+2. Select **Extension type: Java**
+3. Select the compiled JAR file (`burp-extension/build/libs/medaudit2-burp-extension-1.0.0.jar`)
+4. Click **Next** -- the extension loads
+
+## Usage & Configuration
+
 1. Go to the **Medaudit2** tab in Burp Suite
 2. Set the **Medaudit Proxy Host** (default: `localhost`)
 3. Set the **Medaudit Proxy Port** (default: `8080`)
@@ -37,19 +49,3 @@ python -m medaudit.hl7server start --port 2575
 # Start the HTTP-to-MLLP proxy
 python -m medaudit proxy --port 8080 --hl7-host localhost --hl7-port 2575
 ```
-
-## Building from Source
-
-```bash
-cd burp-extension
-./gradlew jar
-# Output: build/libs/medaudit2-burp-extension-1.0.0.jar
-```
-
-Requires Java 17+.
-
----
-
-## AI Assistants & Agents
-
-If you are an AI assistant, coding agent, or LLM working on this codebase, please check the main repository's `.github/` folder and read the appropriate rules file (e.g., `.github/.geminirules`, `.github/.cursorrules`, etc.) to understand the coding standards and project instructions before making any changes.

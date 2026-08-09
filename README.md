@@ -132,15 +132,20 @@ Provider keys you configure in **Settings** are persisted to the SQLite database
 
 ### Burp Suite Extension
 
-A Java extension for Burp Suite that forwards requests to the Medaudit HTTP-to-MLLP proxy for HL7 security testing.
+A Java extension for Burp Suite that forwards requests to the Medaudit HTTP-to-MLLP proxy for HL7 security testing. Source code is provided under [`burp-extension/`](burp-extension/).
 
-1. Download `medaudit2-burp-extension-1.0.0.jar` from the [Releases](https://github.com/anirudhduggal/medaudit2/releases) page
-2. In Burp Suite: **Extensions > Add > Java** and select the JAR
+1. Build the extension JAR from source:
+   ```bash
+   cd burp-extension
+   gradle jar
+   # Output: build/libs/medaudit2-burp-extension-1.0.0.jar
+   ```
+2. In Burp Suite: **Extensions > Add > Java** and select `build/libs/medaudit2-burp-extension-1.0.0.jar`
 3. Configure the Medaudit proxy host/port in the **Medaudit2** tab
 4. Right-click any request in Proxy/Repeater and select **"Send to Medaudit2"**
 5. Responses appear in the **Medaudit2 > Response Log** tab
 
-See [`burp-extension/README.md`](burp-extension/README.md) for full setup instructions including building from source.
+See [`burp-extension/README.md`](burp-extension/README.md) for full details.
 
 ### Docker
 
