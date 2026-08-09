@@ -11,4 +11,6 @@ def test_mcp_tools_registered():
     assert "stop_mock_server" in tool_names
     assert "start_fuzzer" in tool_names
     assert "send_hl7_payload" in tool_names
+    assert "get_project_context" in tool_names
+    assert "run_auto_pentest" in tool_names
     assert "analyze_pcap" in tool_names

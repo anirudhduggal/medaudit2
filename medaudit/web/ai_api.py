@@ -1095,6 +1095,9 @@ async def auto_pentest_start(
     provider = _get_active_provider()
     model = _get_active_model()
 
+    from .ai.context import context_engine
+    project_context = context_engine.build_context(request.project_id, db, include_full_logs=True)
+
     run_id = autopentest.start(
         project_id=request.project_id,
         host=request.target_host,
@@ -1106,6 +1109,7 @@ async def auto_pentest_start(
         model=model,
         intensity=request.intensity,
         llm_narrate=request.llm_narrate,
+        project_context=project_context,
     )
     return {"success": True, "run_id": run_id}
 

@@ -75,7 +75,7 @@ def start_fuzzer(config_yaml: str) -> str:
 
 @mcp.tool()
 def send_hl7_payload(target_host: str, target_port: int, message: str, use_tls: bool = False) -> str:
-    """Sends an HL7 payload to the target and returns the ACK.
+    """Sends an HL7 payload to the target, logs the action into ContextEngine, and returns the ACK.
     
     Args:
         target_host: Target hostname or IP.
@@ -89,8 +89,79 @@ def send_hl7_payload(target_host: str, target_port: int, message: str, use_tls: 
     
     ack = client.send_message(message)
     client.disconnect()
+
+    # Log to ContextEngine if available
+    try:
+        from medaudit.web.ai.context import context_engine
+        context_engine.add_event(
+            module="client",
+            event_type="payload_sent",
+            data={
+                "target": f"{target_host}:{target_port}",
+                "response_status": "success" if ack else "no_ack",
+                "message_preview": message[:100],
+            }
+        )
+    except Exception:
+        pass
     
     return ack if ack else "No response received."
+
+
+@mcp.tool()
+def get_project_context(project_id: str) -> str:
+    """Retrieves full project context, including PCAP traffic analyses, PII findings, HL7 servers, and fuzzer jobs.
+    
+    Args:
+        project_id: ID of the project to retrieve context for.
+    """
+    try:
+        from medaudit.web.database import get_db_manager
+        from medaudit.web.ai.context import context_engine
+        
+        db = get_db_manager().get_session()
+        try:
+            return context_engine.build_context(project_id=project_id, db=db, include_full_logs=True)
+        finally:
+            db.close()
+    except Exception as e:
+        return f"Failed to retrieve project context: {str(e)}"
+
+
+@mcp.tool()
+def run_auto_pentest(project_id: str, target_host: str, target_port: int = 2575, use_tls: bool = False, intensity: str = "standard") -> str:
+    """Launches an automated HL7 penetration test run against a target with project context awareness.
+    
+    Args:
+        project_id: Associated project ID.
+        target_host: Target IP address or hostname.
+        target_port: Target port (default 2575).
+        use_tls: Enable TLS transport (default False).
+        intensity: Pentest intensity preset ('light', 'standard', 'thorough').
+    """
+    try:
+        from medaudit.web.database import get_db_manager
+        from medaudit.web.ai.context import context_engine
+        from medaudit.web.ai import autopentest
+        from medaudit.fuzzer.safety import is_loopback_target
+        
+        db = get_db_manager().get_session()
+        try:
+            project_context = context_engine.build_context(project_id=project_id, db=db, include_full_logs=True)
+            run_id = autopentest.start(
+                project_id=project_id,
+                host=target_host,
+                port=target_port,
+                use_tls=use_tls,
+                authorized=is_loopback_target(target_host),
+                intensity=intensity,
+                project_context=project_context,
+            )
+            return json.dumps({"run_id": run_id, "status": "started", "target": f"{target_host}:{target_port}"})
+        finally:
+            db.close()
+    except Exception as e:
+        return f"Failed to start auto-pentest: {str(e)}"
 
 
 @mcp.tool()
@@ -121,3 +192,4 @@ def analyze_pcap(filepath: str) -> str:
 if __name__ == "__main__":
     # Start the MCP stdio server
     mcp.run()
+
