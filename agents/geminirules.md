@@ -1,30 +1,24 @@
 # .geminirules — Medaudit 2.0 for Google Gemini
 
 ## Project Overview
-**Medaudit 2.0** is a medical device security analyzer for HL7/FHIR traffic. It detects encryption status, extracts HL7 v2.x messages, identifies PII exposure using Presidio NLP + regex hybrid patterns, and provides pentesting capabilities through a full-stack web UI, HTTP→HL7 proxy, and mock HL7 server.
+**Medaudit 2.0** is a medical device security analyzer for HL7/FHIR traffic. It detects encryption status, extracts HL7 v2.x messages, identifies PII exposure using Presidio NLP + regex hybrid patterns, and provides pentesting capabilities through a full-stack web UI, HTTP→HL7 proxy, mock/malicious HL7 servers, AI Co-Pilot Context Engine, and Model Context Protocol (MCP) server integration.
 
-**Domain**: Healthcare IT Security | **Primary Focus**: PII Detection in Medical Device Communications
+**Domain**: Healthcare IT Security | **Primary Focus**: PII Exposure & HL7/MLLP Protocol Vulnerability Assessment
 
 ---
 
 ## Quick Start (Gemini Context)
-
-### Installation
-```bash
-# Clone and setup
-git clone <repo> && cd medaudit2
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-python3 -m spacy download en_core_web_lg
-```
 
 ### Run Core Commands
 ```bash
 # Analyze PCAP for encryption + PII
 python3 -m medaudit analyze medaudit/testFiles/hl7_v2_unencrypted_synthetic.pcap
 
-# Start web UI (http://localhost:8080)
-python3 -m medaudit web --host 0.0.0.0 --port 8080
+# Start web UI (http://localhost:8000)
+python3 -m medaudit web --password "mysecret" --port 8000
+
+# Start Model Context Protocol (MCP) Server for AI Agents
+python3 -m medaudit mcp
 
 # Start mock HL7 server
 python3 -m medaudit.hl7server start --port 2575
@@ -32,7 +26,7 @@ python3 -m medaudit.hl7server start --port 2575
 # Start HTTP→HL7 proxy (for Burp/ZAP)
 python3 -m medaudit proxy --port 8080 --hl7-host localhost --hl7-port 2575
 
-# Create mock user
+# Create user
 python3 -m medaudit user --create --username analyst --password AnalystPass123 --full-name "Security Analyst"
 ```
 
@@ -44,6 +38,9 @@ python3 -m medaudit user --create --username analyst --password AnalystPass123 -
 |-----------|---------|------------|
 | **CLI Analyzer** | PCAP analysis, encryption detection, PII extraction | `medaudit/__main__.py` (analyze command) |
 | **Web UI** | Project management, PCAP upload, real-time analysis dashboard | `medaudit/web/app.py` |
+| **MCP Server** | Exposes FastMCP tools for AI pentest control & context retrieval | `medaudit/mcp_server.py` |
+| **AI Context Engine** | Real-time state aggregator for AI Chat & Auto-Pentest | `medaudit/web/ai/context.py` |
+| **Auto-Pentest Agent** | Semi-autonomous 7-stage HL7 vulnerability testing | `medaudit/web/ai/autopentest.py` |
 | **HTTP→HL7 Proxy** | Security testing via Burp Suite/OWASP ZAP | `medaudit/proxy/proxy_server.py` |
 | **Mock HL7 Server** | MLLP-compliant server for testing devices | `medaudit/hl7server/hl7_mock_server.py` |
 | **HL7 Fuzzer** | Automated HL7 message mutation and attack simulation | `medaudit/fuzzer/cli.py` |
@@ -51,273 +48,32 @@ python3 -m medaudit user --create --username analyst --password AnalystPass123 -
 
 ---
 
-## Key Concepts for Gemini
+## Model Context Protocol (MCP) Tools
 
-### 1. HL7 v2.x Protocol
-**Format**: Pipe-delimited segments with caret-delimited subcomponents
-```
-MSH|^~\\&|SendingApp|SendingFac|ReceivingApp|ReceivingFac|20260211120000||ADT^A01|123|P|2.5
-PID|1||12345^^^MRN||Doe^John^A||19700101|M|...
-```
-
-**Key Fields for PII**:
-- `MSH-9`: Timestamp
-- `PID-3`: Patient ID
-- `PID-5`: Patient Name
-- `PID-7`: Date of Birth
-- `PID-19`: SSN
-- `PID-20`: Driver's License
-
-### 2. MLLP Transport (Minimal Lower Layer Protocol)
-- **Start Byte**: `\x0b` (vertical tab)
-- **End Bytes**: `\x1c\r` (file separator + carriage return)
-- **Format**: `\x0b<HL7_MESSAGE>\x1c\r`
-- **Encryption**: None (plain TCP/IP)
-- **Implications**: PII travels unencrypted over network
-
-### 3. Encryption Detection Heuristics
-- **SSL/TLS Ports**: 443, 993, 995, 465, 587, 8443 → assumed encrypted
-- **Entropy Analysis**: Payload entropy > 0.8 → likely encrypted
-- **Caveat**: Heuristic-based; not cryptographic validation
-
-### 4. PII Detection Strategy (Hybrid Dual-Mode)
-**Mode 1 - Structured HL7 Parsing** (High Confidence: score 1.0)
-- Parse PID segment fields using known positions
-- Extract from predefined HL7 fields
-- Fast and deterministic
-
-**Mode 2 - Presidio NLP** (Variable Confidence: 0.5-0.95)
-- Use Presidio Analyzer with Spacy `en_core_web_lg` model
-- Detects: PERSON, PHONE_NUMBER, EMAIL, SSN, CREDIT_CARD, LOCATION
-- Slower but catches unstructured PII
-
-**Deduplication**: Use (entity_type, value, timestamp) tuples to eliminate duplicates across frames
+When connected via MCP (`python -m medaudit mcp`), Gemini can invoke:
+1. `get_project_context(project_id)`: Fetches full project context, scan history, PCAP findings, PII exposures, and server logs.
+2. `run_auto_pentest(project_id, target_host, ...)`: Launches context-aware semi-autonomous pentest runs.
+3. `send_hl7_payload(target_host, target_port, message)`: Dispatches MLLP payloads and logs activity to `ContextEngine`.
+4. `start_mock_server` / `stop_mock_server`: Controls mock MLLP servers.
+5. `start_fuzzer`: Launches protocol mutation jobs.
+6. `analyze_pcap`: Detailed PCAP parsing, encryption heuristics, and PII identification.
 
 ---
 
-## When Helping with Medaudit Code
+## Key Concepts & Guidelines for Gemini
 
-### Immediate Context You Should Know
-1. **No Export API Implemented** - UI mentions "Export Features" but `/api/export/*` endpoints don't exist
-2. **Proxy State is Dual-Tracked** - In-memory `_active_servers` dict + SQLite database; must check both
-3. **HL7 Server Commands** - Only `start`, `config --show`, `config --create` (NOT `--set` or `status`)
-4. **Message Logging is Per-Server** - Each running server instance collects messages in memory and persists to DB
-5. **User Registration Works** - Self-service via web UI; rate-limited 5 attempts per 5 minutes
+### 1. HL7 v2.x & MLLP Protocol
+- **Format**: Pipe-delimited segments (`MSH`, `PID`, `PV1`) with subcomponents.
+- **MLLP Framing**: Start byte `\x0b`, End bytes `\x1c\r`. Unencrypted TCP.
+- **Binary Safety**: Always use `errors='ignore'` when decoding raw payloads.
 
-### File Locations for Common Tasks
+### 2. Encryption Detection Heuristics
+- **SSL/TLS Ports**: 443, 993, 995, 465, 587, 8443 → assumed encrypted.
+- **Entropy Analysis**: Payload entropy > 0.8 → likely encrypted.
 
-| Task | File | Key Function |
-|------|------|--------------|
-| Add PII pattern | `medaudit/analysis/pii/pii_check.py` | `create_analyzer()`, `detect_pii()` |
-| Fix PCAP parsing | `medaudit/analysis/traffic/traffic_analysis.py` | `analyze_pcap()`, `is_encrypted()` |
-| Modify web API | `medaudit/web/*.py` | Routers: `auth.py`, `client_api.py`, `server_api.py`, etc. |
-| Proxy logic | `medaudit/proxy/proxy_server.py` | `ProxyServer`, MLLP wrapping |
-| Server state | `medaudit/web/server_api.py` | `_active_servers` dict, database sync |
-| Configuration | `medaudit/config/__init__.py` | Config load precedence, JSON structure |
+### 3. Dual-State Awareness
+- Server and Proxy instances are tracked both in-memory (`_active_servers`, `active_proxies`) and in the SQLite database (`ServerInstance`).
+- Always check both live state and database state to prevent state mismatches after web server restarts.
 
----
-
-## Critical Code Patterns
-
-### Binary Payload Decoding (Always Safe)
-```python
-from scapy.all import rdpcap, Raw, TCP
-
-packets = rdpcap(pcap_file)
-for pkt in packets:
-    if TCP in pkt and Raw in pkt:
-        # CRITICAL: Always use errors='ignore'
-        payload = pkt[Raw].load.decode('utf-8', errors='ignore')
-        if 'MSH|' in payload:
-            # Safe to parse as HL7
-```
-
-### MLLP Framing and Unframing
-```python
-# Wrap (sending to HL7 device)
-hl7_msg = "MSH|^~\\&|APP|FAC|..."
-mllp_framed = b'\x0b' + hl7_msg.encode() + b'\x1c\r'
-
-# Unwrap (receiving from HL7 device)
-def unwrap_mllp(data: bytes) -> str:
-    if data.startswith(b'\x0b'):
-        data = data[1:]
-    if b'\x1c' in data:
-        data = data.split(b'\x1c')[0]
-    return data.decode('utf-8', errors='ignore')
-```
-
-### HL7 Segment Parsing
-```python
-def parse_hl7_segment(segment: str, field_sep='|', component_sep='^'):
-    """Parse pipe-delimited, caret-separated HL7 segment."""
-    parts = segment.split(field_sep)
-    return {
-        'type': parts[0],          # MSH, PID, etc.
-        'fields': [
-            part.split(component_sep) for part in parts[1:]
-        ]
-    }
-
-# Example: Extract patient name from PID
-pid_segment = "PID|1||12345^^^MRN||Doe^John||19700101|..."
-parsed = parse_hl7_segment(pid_segment)
-patient_name = parsed['fields'][4][0]  # "Doe"
-```
-
-### PII Detection (Cached Analyzer)
-```python
-from medaudit.analysis.pii.pii_check import create_analyzer
-
-# Initialize once (global or module-level)
-analyzer = create_analyzer()
-
-# Use for multiple texts (reuse instance!)
-def find_pii(text: str):
-    results = analyzer.analyze(text=text, language='en')
-    for entity in results:
-        entity_type = entity.entity_type
-        value = text[entity.start:entity.end]
-        confidence = entity.score
-        print(f"{entity_type}: {value} ({confidence:.2f})")
-```
-
-### Configuration Loading (Multi-Level Precedence)
-```python
-from medaudit.config import config
-
-# Load respects: CLI → ./config/medaudit.json → ~/.medaudit.json → defaults
-proxy_config = config.get_proxy_config()
-hl7_host = proxy_config.get('hl7_host', 'localhost')
-hl7_port = proxy_config.get('hl7_port', 2575)
-```
-
----
-
-## Troubleshooting Guide for Gemini
-
-### Issue: "ModuleNotFoundError: No module named 'scapy'"
-**Cause**: Dependencies not installed
-**Fix**: `pip install -r requirements.txt && python3 -m spacy download en_core_web_lg`
-
-### Issue: PCAP analysis returns no HL7 messages
-**Cause**: PCAP contains non-HL7 traffic or payload encoding issue
-**Debug**:
-```python
-from scapy.all import rdpcap, Raw, TCP
-packets = rdpcap('file.pcap')
-for i, pkt in enumerate(packets[:5]):
-    if TCP in pkt and Raw in pkt:
-        payload = pkt[Raw].load.decode('utf-8', errors='ignore')[:100]
-        print(f"Packet {i}: {payload}")
-```
-
-### Issue: PII detection is slow
-**Cause**: Analyzer not cached; Spacy model loaded per request
-**Fix**: Initialize analyzer once at module level; reuse instance across requests
-
-### Issue: Proxy returns "Empty ACK" or "Connection refused"
-**Cause**: HL7 server not running or MLLP framing incorrect
-**Debug**:
-```bash
-# Terminal 1: Start server
-python3 -m medaudit.hl7server start --port 2575
-
-# Terminal 2: Test connection
-telnet localhost 2575
-
-# Terminal 3: Start proxy and test
-python3 -m medaudit proxy --port 8080
-curl -X POST http://localhost:8080 -d "MSH|^~\&|TEST|||20260211||ADT^A01|1|2.5"
-```
-
-### Issue: Server state shows "Stopped" after page refresh
-**Cause**: Dual-state sync issue; in-memory dict lost, database has stale status
-**Fix**: API endpoint checks `_active_servers` dict first; if missing, syncs database status to "stopped"
-
----
-
-## Testing Commands for Gemini-Assisted Development
-
-```bash
-# Run all tests
-pytest -v
-
-# Test PII detection accuracy
-pytest tests/test_pii_check.py -v
-
-# Test HL7 server/client integration
-pytest tests/test_hl7_server_client.py -v
-
-# Manual PCAP analysis test
-python3 tests/analyze_pcap_pii.py
-
-# Check if admin user exists
-python3 -m medaudit user --list (if implemented)
-```
-
----
-
-## Important Constraints & Gotchas
-
-✅ **DO:**
-- Use `errors='ignore'` for all binary payload decoding
-- Check for `MSH|` marker before treating data as HL7
-- Cache Presidio analyzer instance globally
-- Maintain MLLP framing in proxy (required for HL7 devices)
-- Log all errors with full context; never silently fail
-- Respect config precedence: CLI args > config files > defaults
-
-❌ **DON'T:**
-- Recreate Spacy model per request (10x+ slowdown)
-- Parse HL7 without validating MSH| marker
-- Hardcode configuration values
-- Assume all medical device traffic is well-formed
-- Skip error handling on binary payloads
-- Modify database directly without checking in-memory state
-- Assume sessions/tokens persist across web server restart
-
----
-
-## Medical Device Security Context
-
-**Why This Tool Matters:**
-- HL7 is healthcare's de facto standard for patient/order/result data
-- MLLP transport has **no built-in encryption**
-- Patient data (PII/PHI) travels **unencrypted** in many legacy deployments
-- Regulatory compliance (HIPAA) requires either encryption or justified exceptions
-- Pentesting medical device security requires isolated environments and controlled traffic
-
-**Real-World Example:**
-```
-Legacy Lab Device → Hospital Network (Unencrypted MLLP)
-├─ Patient Name: John Doe
-├─ MRN: 12345
-├─ SSN: 123-45-6789
-└─ Test Results: Positive for [condition]
-
-Medaudit detects all PII in plaintext → Security risk = CRITICAL
-```
-
-**Our Role**: Enable security auditors to identify and document these risks safely.
-
----
-
-## Gemini-Specific Guidance
-
-When you're asked to help with Medaudit code:
-
-1. **Always verify assumptions** - Command syntax, file paths, and API endpoints change; check the actual codebase first
-2. **Dual-state awareness** - When dealing with servers/proxies, check both in-memory tracking and database state
-3. **Binary safety** - Any code touching network payloads needs `errors='ignore'` on decode operations
-4. **Cache awareness** - If performance is discussed and Presidio is involved, check if analyzer is cached
-5. **Configuration respect** - Don't suggest hardcoding; direct to `medaudit.config` module
-6. **Test before claiming** - PCAP analysis and PII detection are complex; suggest running test suite to verify claims
-
----
-
-## Reference Links
-- **README**: [README.md](../README.md)
-- **Agent Instructions**: [copilot-instructions.md](copilot-instructions.md)
-- **Config Guide**: [medaudit/config/README.md](../medaudit/config/README.md)
-- **HL7 Docs**: [medaudit/hl7server/README.md](../medaudit/hl7server/README.md)
+### 4. Encrypted Credentials
+- AI provider API keys are encrypted at rest using local AES-256-GCM keyfile protection (`medaudit/data/.secret_key` with `0600` permissions).
