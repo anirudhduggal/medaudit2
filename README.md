@@ -181,23 +181,7 @@ python -m medaudit user --create --username john --password pass123 --admin
 python -m medaudit.fuzzer run -c config.yaml -o results.json
 ```
 
----
 
-## Demo Environment
-
-A deliberately-vulnerable, containerized HL7 target — **"St. Elsewhere Hospital"** — is included under [`demo/hospital-sim/`](demo/hospital-sim/) for demos and training (think DVWA/Juice Shop, but for HL7). It runs an HL7/MLLP feed plus a clinical worklist viewer, seeded with **synthetic** patients, with planted weaknesses (cleartext PHI, SQL injection, crash-on-oversized-input, stored XSS) that map to what medaudit detects.
-
-```bash
-cd demo/hospital-sim
-docker compose up --build
-```
-
-- HL7/MLLP feed (attack this): `localhost:2575`
-- Clinical viewer (watch results here): `http://localhost:8081`
-
-Point medaudit's Client/Fuzzer/Auto-Pentest at `localhost:2575`. See [`demo/hospital-sim/DEMO.md`](demo/hospital-sim/DEMO.md) for a full guided walkthrough. **Synthetic data and authorized testing only** — never expose it to a network or feed it real PHI.
-
----
 
 ## Command Reference
 

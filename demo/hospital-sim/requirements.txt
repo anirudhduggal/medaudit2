@@ -1,2 +1,0 @@
-# Demo hospital target dependencies (kept minimal on purpose).
-Flask>=3.0,<4.0
