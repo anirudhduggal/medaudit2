@@ -30,11 +30,13 @@ public class Medaudit2ConfigTab {
 
         // Description
         gbc.gridy = 1;
-        JLabel desc = new JLabel(
-            "<html>Configure the Medaudit HTTP-to-MLLP proxy address.<br>" +
-            "Right-click any request in Proxy/Repeater and select <b>\"Send to Medaudit2\"</b><br>" +
-            "to forward it to your medical device via HL7/MLLP.</html>"
+        JTextArea desc = new JTextArea(
+            "Configure the Medaudit HTTP-to-MLLP proxy target address.\n" +
+            "Right-click any HTTP request in Burp Proxy or Repeater and select 'Send to Medaudit2'\n" +
+            "to forward the request payload to your target medical device via HL7/MLLP."
         );
+        desc.setEditable(false);
+        desc.setOpaque(false);
         desc.setFont(desc.getFont().deriveFont(Font.PLAIN, 12f));
         panel.add(desc, gbc);
 

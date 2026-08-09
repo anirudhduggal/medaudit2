@@ -31,7 +31,12 @@ public class Medaudit2HttpClient {
      */
     public static Response post(String host, int port, String body) throws IOException {
         URL url = new URL("http://" + host + ":" + port + "/");
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        HttpURLConnection conn;
+        try {
+            conn = (HttpURLConnection) url.openConnection();
+        } catch (IOException e) {
+            throw new IOException("Failed to open connection to " + host + ":" + port + " - " + e.getMessage(), e);
+        }
 
         try {
             conn.setRequestMethod("POST");
@@ -67,10 +72,28 @@ public class Medaudit2HttpClient {
                 responseBody = "";
             }
 
+            // Check if response is HTML (indicating pointing to Web UI instead of Proxy)
+            String lower = responseBody.toLowerCase();
+            if (lower.contains("<html") || lower.contains("<!doctype html")) {
+                responseBody = "[Notice: Received HTML response from server]\n" +
+                               "You may have configured the extension to point to the Medaudit Web UI port (e.g. 8000) " +
+                               "instead of the HTTP-to-HL7 Proxy port (e.g. 8080).\n\n" +
+                               "Start the proxy with:\n" +
+                               "  python -m medaudit proxy --port " + port + " --hl7-host localhost --hl7-port 2575\n\n" +
+                               "--- Raw Server Response ---\n" + responseBody;
+            }
+
             return new Response(statusCode, responseBody);
 
+        } catch (java.net.ConnectException ce) {
+            String errorMsg = "Connection Refused (getsockopt): Could not reach Medaudit Proxy at " + host + ":" + port + ".\n" +
+                              "Please ensure the Medaudit HTTP-to-HL7 proxy server is running:\n" +
+                              "  python -m medaudit proxy --port " + port + " --hl7-host localhost --hl7-port 2575";
+            throw new IOException(errorMsg, ce);
         } finally {
-            conn.disconnect();
+            try {
+                conn.disconnect();
+            } catch (Exception ignored) {}
         }
     }
 }

@@ -122,7 +122,7 @@ public class Medaudit2Extension implements BurpExtension {
                 });
 
             } catch (Exception ex) {
-                final String error = "Connection error: " + ex.getClass().getSimpleName() + " - " + ex.getMessage();
+                final String error = ex.getMessage() != null ? ex.getMessage() : ("Connection error: " + ex.getClass().getSimpleName());
                 api.logging().logToError("[Medaudit2] " + error);
 
                 SwingUtilities.invokeLater(() -> {

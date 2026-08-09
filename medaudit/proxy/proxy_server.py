@@ -218,7 +218,7 @@ def start_proxy(
     
     # Create and start server
     with socketserver.TCPServer((http_host, http_port), HL7ProxyHandler) as server:
-        print(f"HTTP → MLLP Converter started")
+        print(f"HTTP -> MLLP Converter started")
         print(f"  HTTP Server:     http://{http_host}:{http_port}")
         print(f"  Target HL7:      {hl7_host}:{hl7_port}")
         print(f"  Logging:         {'Enabled' if enable_logging else 'Disabled'}")

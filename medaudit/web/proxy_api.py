@@ -89,6 +89,12 @@ async def start_proxy(
             del active_proxies[proxy_port]
         
         # Start proxy process
+        import os
+        import time
+        env = dict(os.environ)
+        env["PYTHONIOENCODING"] = "utf-8"
+        env["PYTHONUTF8"] = "1"
+
         process = subprocess.Popen(
             [
                 sys.executable, "-m", "medaudit.proxy.proxy_server",
@@ -99,8 +105,19 @@ async def start_proxy(
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            encoding="utf-8",
+            env=env,
         )
+
+        time.sleep(0.5)
+        if process.poll() is not None:
+            _, err_output = process.communicate()
+            logger.error(f"Proxy process failed to start: {err_output}")
+            return {
+                "success": False,
+                "detail": f"Proxy process exited immediately: {err_output.strip() if err_output else 'Unknown error'}"
+            }
         
         # Store process & configuration metadata
         active_proxies[proxy_port] = {
