@@ -310,7 +310,7 @@ class ManagedHL7Server:
         finally:
             try:
                 client_socket.close()
-            except:
+            except Exception:
                 pass
             
             self._log_event("connection", {
@@ -387,7 +387,7 @@ class ManagedHL7Server:
         if self.server_socket:
             try:
                 self.server_socket.close()
-            except:
+            except Exception:
                 pass
         self.server_socket = None
 
@@ -469,7 +469,7 @@ def run_server(server_id: str, config: dict, db_session_factory):
                 db_server.status = "error"
                 db.commit()
             db.close()
-        except:
+        except Exception:
             pass
     
     finally:
@@ -485,7 +485,7 @@ def run_server(server_id: str, config: dict, db_session_factory):
                     db_server.status = "stopped"
                     db.commit()
                 db.close()
-            except:
+            except Exception:
                 pass
 
 
@@ -757,7 +757,7 @@ async def update_server(
         if server.settings:
             try:
                 settings = json.loads(server.settings)
-            except:
+            except Exception:
                 pass
         settings["auto_tls"] = server_data.auto_tls
         server.settings = json.dumps(settings)
@@ -806,7 +806,7 @@ async def start_server(
     if server.settings:
         try:
             settings = json.loads(server.settings)
-        except:
+        except Exception:
             pass
             
     # Check TLS requirements and auto-generate if needed

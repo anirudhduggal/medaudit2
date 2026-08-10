@@ -646,7 +646,7 @@ def extract_hl7_from_payload(payload: bytes) -> Optional[str]:
             return text[msh_start:]
         
         return None
-    except:
+    except Exception:
         return None
 
 
